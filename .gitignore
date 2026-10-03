@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+
+# Embedding cache: 9.3 GB for the full run, regenerate with
+# scripts/extract_embeddings.py
+embeddings/
+*.npy
+
+# Derived splits; metadata_*.json is kept so a split can be reproduced
+DATA/split/*.xlsx
+DATA/split/*.png
+
+.ipynb_checkpoints/
+.venv/
