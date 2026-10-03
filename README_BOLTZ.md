@@ -42,6 +42,7 @@ L4 (`l4x1`, $0.80/h), 191 tokens per complex, `--no_kernels`:
 |---|---:|
 | 10 sampling steps, 0 recycling | 5.54 |
 | 10 sampling steps, 3 recycling | 7.73 |
+| 200 sampling steps, 3 recycling | 15.10 |
 | **end to end, incl. reduction** | **9.41** |
 
 | Scope | Cost at 9.41 s | Fits $20? |
