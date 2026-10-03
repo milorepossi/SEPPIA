@@ -1,0 +1,565 @@
+{
+  "strata": [
+    {
+      "stratum": "= 0",
+      "rows_pct": 20.1112426035503,
+      "error_pct": 24.67966854572296,
+      "error_pct_sd": 6.454858727968625,
+      "rmse": 1.2817320108413697,
+      "rmse_sd": 0.17268966950778608,
+      "bias": 0.8470202684402466,
+      "bias_sd": 0.1542254655260197
+    },
+    {
+      "stratum": "(0, 0.5]",
+      "rows_pct": 17.928994082840237,
+      "error_pct": 12.41076648235321,
+      "error_pct_sd": 1.6038890470984772,
+      "rmse": 0.9687873125076294,
+      "rmse_sd": 0.07952768223541588,
+      "bias": 0.2995170086622238,
+      "bias_sd": 0.09769934418942747
+    },
+    {
+      "stratum": "(0.5, 2]",
+      "rows_pct": 22.52544378698225,
+      "error_pct": 17.508389055728912,
+      "error_pct_sd": 2.161507971363797,
+      "rmse": 1.0257513284683228,
+      "rmse_sd": 0.04066234847468113,
+      "bias": -0.03576442152261734,
+      "bias_sd": 0.10840102429886406
+    },
+    {
+      "stratum": "(2, 8]",
+      "rows_pct": 20.968047337278108,
+      "error_pct": 20.857594907283783,
+      "error_pct_sd": 1.6537384767125838,
+      "rmse": 1.1658535599708557,
+      "rmse_sd": 0.10373023689443807,
+      "bias": -0.5100726902484893,
+      "bias_sd": 0.10509318391065928
+    },
+    {
+      "stratum": "> 8",
+      "rows_pct": 18.466272189349116,
+      "error_pct": 24.54358011484146,
+      "error_pct_sd": 6.88594349763317,
+      "rmse": 1.3360412120819092,
+      "rmse_sd": 0.1973213110185151,
+      "bias": -0.8460883855819702,
+      "bias_sd": 0.17164874668335922
+    }
+  ],
+  "thresholds": [
+    {
+      "threshold": 0.5,
+      "true_positive": 4619,
+      "false_positive": 860,
+      "false_negative": 628,
+      "true_negative": 2343,
+      "positive_rows": 5247,
+      "negative_rows": 3203,
+      "false_positive_rate": 0.2684982828598189,
+      "false_negative_rate": 0.11968744044215743,
+      "precision": 0.8430370505566709,
+      "recall": 0.8803125595578426,
+      "accuracy": 0.823905325443787
+    },
+    {
+      "threshold": 1.0,
+      "true_positive": 3623,
+      "false_positive": 854,
+      "false_negative": 672,
+      "true_negative": 3301,
+      "positive_rows": 4295,
+      "negative_rows": 4155,
+      "false_positive_rate": 0.20553549939831528,
+      "false_negative_rate": 0.15646100116414435,
+      "precision": 0.8092472637927184,
+      "recall": 0.8435389988358556,
+      "accuracy": 0.8194082840236686
+    },
+    {
+      "threshold": 2.0,
+      "true_positive": 2706,
+      "false_positive": 744,
+      "false_negative": 699,
+      "true_negative": 4301,
+      "positive_rows": 3405,
+      "negative_rows": 5045,
+      "false_positive_rate": 0.14747274529236867,
+      "false_negative_rate": 0.2052863436123348,
+      "precision": 0.7843478260869565,
+      "recall": 0.7947136563876652,
+      "accuracy": 0.8292307692307692
+    }
+  ],
+  "per_split": [
+    {
+      "split_index": 0,
+      "epsilon": 0.1,
+      "rmse": 1.0798600912094116,
+      "bias": 0.048941876739263535,
+      "over_predicted": 0.5223668639053255,
+      "strata": [
+        {
+          "stratum": "= 0",
+          "rows": 1698,
+          "share_of_rows": 0.20094674556213019,
+          "share_of_squared_error": 0.2928938567638397,
+          "rmse": 1.3037134408950806,
+          "bias": 0.9276910424232483
+        },
+        {
+          "stratum": "(0, 0.5]",
+          "rows": 1505,
+          "share_of_rows": 0.17810650887573964,
+          "share_of_squared_error": 0.12900197505950928,
+          "rmse": 0.919021725654602,
+          "bias": 0.3254975378513336
+        },
+        {
+          "stratum": "(0.5, 2]",
+          "rows": 1842,
+          "share_of_rows": 0.21798816568047338,
+          "share_of_squared_error": 0.17842675745487213,
+          "rmse": 0.9769695997238159,
+          "bias": 0.0749906450510025
+        },
+        {
+          "stratum": "(2, 8]",
+          "rows": 1858,
+          "share_of_rows": 0.21988165680473373,
+          "share_of_squared_error": 0.1860182136297226,
+          "rmse": 0.9932320713996887,
+          "bias": -0.3627163767814636
+        },
+        {
+          "stratum": "> 8",
+          "rows": 1547,
+          "share_of_rows": 0.18307692307692308,
+          "share_of_squared_error": 0.2136591672897339,
+          "rmse": 1.1665717363357544,
+          "bias": -0.7212282419204712
+        }
+      ],
+      "confusion": [
+        {
+          "threshold": 0.5,
+          "true_positive": 4619,
+          "false_positive": 860,
+          "false_negative": 628,
+          "true_negative": 2343,
+          "positive_rows": 5247,
+          "negative_rows": 3203,
+          "false_positive_rate": 0.2684982828598189,
+          "false_negative_rate": 0.11968744044215743,
+          "precision": 0.8430370505566709,
+          "recall": 0.8803125595578426,
+          "accuracy": 0.823905325443787
+        },
+        {
+          "threshold": 1.0,
+          "true_positive": 3623,
+          "false_positive": 854,
+          "false_negative": 672,
+          "true_negative": 3301,
+          "positive_rows": 4295,
+          "negative_rows": 4155,
+          "false_positive_rate": 0.20553549939831528,
+          "false_negative_rate": 0.15646100116414435,
+          "precision": 0.8092472637927184,
+          "recall": 0.8435389988358556,
+          "accuracy": 0.8194082840236686
+        },
+        {
+          "threshold": 2.0,
+          "true_positive": 2706,
+          "false_positive": 744,
+          "false_negative": 699,
+          "true_negative": 4301,
+          "positive_rows": 3405,
+          "negative_rows": 5045,
+          "false_positive_rate": 0.14747274529236867,
+          "false_negative_rate": 0.2052863436123348,
+          "precision": 0.7843478260869565,
+          "recall": 0.7947136563876652,
+          "accuracy": 0.8292307692307692
+        }
+      ]
+    },
+    {
+      "split_index": 1,
+      "epsilon": 0.1,
+      "rmse": 1.1940397024154663,
+      "bias": -0.20750178396701813,
+      "over_predicted": 0.44662721893491125,
+      "strata": [
+        {
+          "stratum": "= 0",
+          "rows": 1708,
+          "share_of_rows": 0.2021301775147929,
+          "share_of_squared_error": 0.16498848795890808,
+          "rmse": 1.0787729024887085,
+          "bias": 0.7314152121543884
+        },
+        {
+          "stratum": "(0, 0.5]",
+          "rows": 1564,
+          "share_of_rows": 0.1850887573964497,
+          "share_of_squared_error": 0.09907762706279755,
+          "rmse": 0.873607873916626,
+          "bias": 0.16906702518463135
+        },
+        {
+          "stratum": "(0.5, 2]",
+          "rows": 1943,
+          "share_of_rows": 0.22994082840236688,
+          "share_of_squared_error": 0.16202889382839203,
+          "rmse": 1.0023213624954224,
+          "bias": -0.19557444751262665
+        },
+        {
+          "stratum": "(2, 8]",
+          "rows": 1667,
+          "share_of_rows": 0.19727810650887573,
+          "share_of_squared_error": 0.21042212843894958,
+          "rmse": 1.2331758737564087,
+          "bias": -0.6572909355163574
+        },
+        {
+          "stratum": "> 8",
+          "rows": 1568,
+          "share_of_rows": 0.1855621301775148,
+          "share_of_squared_error": 0.36348289251327515,
+          "rmse": 1.6711525917053223,
+          "bias": -1.1424508094787598
+        }
+      ],
+      "confusion": [
+        {
+          "threshold": 0.5,
+          "true_positive": 4212,
+          "false_positive": 696,
+          "false_negative": 966,
+          "true_negative": 2576,
+          "positive_rows": 5178,
+          "negative_rows": 3272,
+          "false_positive_rate": 0.21271393643031786,
+          "false_negative_rate": 0.186558516801854,
+          "precision": 0.8581907090464548,
+          "recall": 0.813441483198146,
+          "accuracy": 0.8033136094674557
+        },
+        {
+          "threshold": 1.0,
+          "true_positive": 3169,
+          "false_positive": 705,
+          "false_negative": 958,
+          "true_negative": 3618,
+          "positive_rows": 4127,
+          "negative_rows": 4323,
+          "false_positive_rate": 0.16308119361554477,
+          "false_negative_rate": 0.2321298764235522,
+          "precision": 0.8180175529168818,
+          "recall": 0.7678701235764478,
+          "accuracy": 0.8031952662721894
+        },
+        {
+          "threshold": 2.0,
+          "true_positive": 2313,
+          "false_positive": 517,
+          "false_negative": 922,
+          "true_negative": 4698,
+          "positive_rows": 3235,
+          "negative_rows": 5215,
+          "false_positive_rate": 0.09913710450623202,
+          "false_negative_rate": 0.28500772797527046,
+          "precision": 0.8173144876325088,
+          "recall": 0.7149922720247295,
+          "accuracy": 0.8297041420118343
+        }
+      ]
+    },
+    {
+      "split_index": 2,
+      "epsilon": 0.1,
+      "rmse": 1.1936907768249512,
+      "bias": -0.010005457326769829,
+      "over_predicted": 0.513491124260355,
+      "strata": [
+        {
+          "stratum": "= 0",
+          "rows": 1688,
+          "share_of_rows": 0.19976331360946745,
+          "share_of_squared_error": 0.23484839498996735,
+          "rmse": 1.2942787408828735,
+          "bias": 0.903323233127594
+        },
+        {
+          "stratum": "(0, 0.5]",
+          "rows": 1514,
+          "share_of_rows": 0.1791715976331361,
+          "share_of_squared_error": 0.14167384803295135,
+          "rmse": 1.061456322669983,
+          "bias": 0.4106236398220062
+        },
+        {
+          "stratum": "(0.5, 2]",
+          "rows": 1819,
+          "share_of_rows": 0.2152662721893491,
+          "share_of_squared_error": 0.17293111979961395,
+          "rmse": 1.06989324092865,
+          "bias": 0.02255823276937008
+        },
+        {
+          "stratum": "(2, 8]",
+          "rows": 1823,
+          "share_of_rows": 0.2157396449704142,
+          "share_of_squared_error": 0.23049119114875793,
+          "rmse": 1.2338263988494873,
+          "bias": -0.5202395915985107
+        },
+        {
+          "stratum": "> 8",
+          "rows": 1606,
+          "share_of_rows": 0.19005917159763314,
+          "share_of_squared_error": 0.2200554460287094,
+          "rmse": 1.2844390869140625,
+          "bias": -0.8242071270942688
+        }
+      ],
+      "confusion": [
+        {
+          "threshold": 0.5,
+          "true_positive": 4475,
+          "false_positive": 946,
+          "false_negative": 773,
+          "true_negative": 2256,
+          "positive_rows": 5248,
+          "negative_rows": 3202,
+          "false_positive_rate": 0.2954403497813866,
+          "false_negative_rate": 0.14729420731707318,
+          "precision": 0.825493451392732,
+          "recall": 0.8527057926829268,
+          "accuracy": 0.7965680473372782
+        },
+        {
+          "threshold": 1.0,
+          "true_positive": 3544,
+          "false_positive": 889,
+          "false_negative": 788,
+          "true_negative": 3229,
+          "positive_rows": 4332,
+          "negative_rows": 4118,
+          "false_positive_rate": 0.21588149587178243,
+          "false_negative_rate": 0.1819021237303786,
+          "precision": 0.7994586059102188,
+          "recall": 0.8180978762696214,
+          "accuracy": 0.8015384615384615
+        },
+        {
+          "threshold": 2.0,
+          "true_positive": 2610,
+          "false_positive": 725,
+          "false_negative": 819,
+          "true_negative": 4296,
+          "positive_rows": 3429,
+          "negative_rows": 5021,
+          "false_positive_rate": 0.1443935471021709,
+          "false_negative_rate": 0.2388451443569554,
+          "precision": 0.782608695652174,
+          "recall": 0.7611548556430446,
+          "accuracy": 0.8172781065088758
+        }
+      ]
+    },
+    {
+      "split_index": 3,
+      "epsilon": 0.1,
+      "rmse": 1.2074016332626343,
+      "bias": 0.008457113988697529,
+      "over_predicted": 0.4919526627218935,
+      "strata": [
+        {
+          "stratum": "= 0",
+          "rows": 1695,
+          "share_of_rows": 0.20059171597633135,
+          "share_of_squared_error": 0.3279416263103485,
+          "rmse": 1.543808937072754,
+          "bias": 1.0259029865264893
+        },
+        {
+          "stratum": "(0, 0.5]",
+          "rows": 1498,
+          "share_of_rows": 0.17727810650887574,
+          "share_of_squared_error": 0.13116542994976044,
+          "rmse": 1.0385655164718628,
+          "bias": 0.35992342233657837
+        },
+        {
+          "stratum": "(0.5, 2]",
+          "rows": 1829,
+          "share_of_rows": 0.21644970414201184,
+          "share_of_squared_error": 0.15262429416179657,
+          "rmse": 1.0138765573501587,
+          "bias": 0.013233447447419167
+        },
+        {
+          "stratum": "(2, 8]",
+          "rows": 1893,
+          "share_of_rows": 0.22402366863905326,
+          "share_of_squared_error": 0.20087909698486328,
+          "rmse": 1.143331527709961,
+          "bias": -0.5229126811027527
+        },
+        {
+          "stratum": "> 8",
+          "rows": 1535,
+          "share_of_rows": 0.1816568047337278,
+          "share_of_squared_error": 0.1873895525932312,
+          "rmse": 1.226305365562439,
+          "bias": -0.8084290027618408
+        }
+      ],
+      "confusion": [
+        {
+          "threshold": 0.5,
+          "true_positive": 4529,
+          "false_positive": 945,
+          "false_negative": 728,
+          "true_negative": 2248,
+          "positive_rows": 5257,
+          "negative_rows": 3193,
+          "false_positive_rate": 0.29595991230817414,
+          "false_negative_rate": 0.1384820239680426,
+          "precision": 0.8273657289002557,
+          "recall": 0.8615179760319573,
+          "accuracy": 0.8020118343195266
+        },
+        {
+          "threshold": 1.0,
+          "true_positive": 3503,
+          "false_positive": 940,
+          "false_negative": 825,
+          "true_negative": 3182,
+          "positive_rows": 4328,
+          "negative_rows": 4122,
+          "false_positive_rate": 0.22804463852498788,
+          "false_negative_rate": 0.1906192236598891,
+          "precision": 0.7884312401530498,
+          "recall": 0.8093807763401109,
+          "accuracy": 0.7911242603550296
+        },
+        {
+          "threshold": 2.0,
+          "true_positive": 2560,
+          "false_positive": 798,
+          "false_negative": 868,
+          "true_negative": 4224,
+          "positive_rows": 3428,
+          "negative_rows": 5022,
+          "false_positive_rate": 0.15890083632019117,
+          "false_negative_rate": 0.2532088681446908,
+          "precision": 0.7623585467540203,
+          "recall": 0.7467911318553092,
+          "accuracy": 0.8028402366863905
+        }
+      ]
+    },
+    {
+      "split_index": 4,
+      "epsilon": 0.1,
+      "rmse": 1.1565296649932861,
+      "bias": -0.07896068692207336,
+      "over_predicted": 0.4847337278106509,
+      "strata": [
+        {
+          "stratum": "= 0",
+          "rows": 1708,
+          "share_of_rows": 0.2021301775147929,
+          "share_of_squared_error": 0.2133110612630844,
+          "rmse": 1.1880860328674316,
+          "bias": 0.6467688679695129
+        },
+        {
+          "stratum": "(0, 0.5]",
+          "rows": 1494,
+          "share_of_rows": 0.17680473372781066,
+          "share_of_squared_error": 0.1196194440126419,
+          "rmse": 0.9512851238250732,
+          "bias": 0.23247341811656952
+        },
+        {
+          "stratum": "(0.5, 2]",
+          "rows": 2084,
+          "share_of_rows": 0.24662721893491124,
+          "share_of_squared_error": 0.20940838754177094,
+          "rmse": 1.065695881843567,
+          "bias": -0.0940299853682518
+        },
+        {
+          "stratum": "(2, 8]",
+          "rows": 1618,
+          "share_of_rows": 0.1914792899408284,
+          "share_of_squared_error": 0.21506911516189575,
+          "rmse": 1.225701928138733,
+          "bias": -0.4872038662433624
+        },
+        {
+          "stratum": "> 8",
+          "rows": 1546,
+          "share_of_rows": 0.1829585798816568,
+          "share_of_squared_error": 0.2425919473171234,
+          "rmse": 1.3317372798919678,
+          "bias": -0.7341267466545105
+        }
+      ],
+      "confusion": [
+        {
+          "threshold": 0.5,
+          "true_positive": 4321,
+          "false_positive": 737,
+          "false_negative": 927,
+          "true_negative": 2465,
+          "positive_rows": 5248,
+          "negative_rows": 3202,
+          "false_positive_rate": 0.2301686445971268,
+          "false_negative_rate": 0.17663871951219512,
+          "precision": 0.8542902332937921,
+          "recall": 0.8233612804878049,
+          "accuracy": 0.803076923076923
+        },
+        {
+          "threshold": 1.0,
+          "true_positive": 3291,
+          "false_positive": 854,
+          "false_negative": 871,
+          "true_negative": 3434,
+          "positive_rows": 4162,
+          "negative_rows": 4288,
+          "false_positive_rate": 0.19916044776119404,
+          "false_negative_rate": 0.20927438731379144,
+          "precision": 0.7939686369119421,
+          "recall": 0.7907256126862086,
+          "accuracy": 0.7958579881656804
+        },
+        {
+          "threshold": 2.0,
+          "true_positive": 2465,
+          "false_positive": 753,
+          "false_negative": 699,
+          "true_negative": 4533,
+          "positive_rows": 3164,
+          "negative_rows": 5286,
+          "false_positive_rate": 0.1424517593643587,
+          "false_negative_rate": 0.2209228824273072,
+          "precision": 0.7660037290242386,
+          "recall": 0.7790771175726928,
+          "accuracy": 0.8281656804733728
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Peptide-HLA stability: MLP baseline</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root {
+    --ink: #0b0b0b; --secondary: #52514e; --muted: #898781;
+    --rule: #c3c2b7; --hair: #e1e0d9; --surface: #fcfcfb;
+    --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a;
+  }
+  html { font-size: 10.5pt; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink); background: var(--surface);
+    margin: 0; line-height: 1.5; text-align: left;
+  }
+  h1 { font-size: 20pt; line-height: 1.2; margin: 0 0 4pt; }
+  h2 { font-size: 13pt; margin: 18pt 0 6pt; padding-bottom: 3pt;
+       border-bottom: 1px solid var(--rule); break-after: avoid; }
+  h3 { font-size: 11pt; margin: 12pt 0 4pt; break-after: avoid; }
+  p, li { margin: 0 0 6pt; }
+  ul, ol { margin: 0 0 6pt; padding-left: 16pt; }
+  .byline { color: var(--secondary); font-size: 9.5pt; margin: 0 0 2pt; }
+  .lede { color: var(--secondary); margin: 8pt 0 0; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 9pt; }
+  pre { background: #f4f3ef; border: 1px solid var(--hair); border-radius: 4px;
+        padding: 7pt 9pt; margin: 6pt 0; overflow-wrap: anywhere;
+        white-space: pre-wrap; font-size: 8.5pt; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0 4pt;
+          font-size: 9.2pt; font-variant-numeric: tabular-nums; break-inside: avoid; }
+  caption { caption-side: top; text-align: left; color: var(--secondary);
+            font-size: 9pt; padding-bottom: 3pt; }
+  th, td { text-align: right; padding: 3.5pt 6pt; border-bottom: 1px solid var(--hair); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { border-bottom: 1px solid var(--rule); color: var(--secondary);
+             font-weight: 600; }
+  tbody tr:last-child td { border-bottom: 1px solid var(--rule); }
+  tr.total td { font-weight: 600; }
+  figure { margin: 8pt 0 10pt; break-inside: avoid; }
+  figure img { width: 100%; border: 1px solid var(--hair); border-radius: 3px; }
+  figcaption { color: var(--secondary); font-size: 8.8pt; margin-top: 4pt; }
+  .note { border-left: 2px solid var(--rule); padding: 2pt 0 2pt 9pt;
+          color: var(--secondary); margin: 8pt 0; }
+  .keyval { display: grid; grid-template-columns: max-content 1fr; gap: 2pt 12pt;
+            font-size: 9.2pt; margin: 6pt 0; }
+  .keyval dt { color: var(--secondary); }
+  .keyval dd { margin: 0; }
+  .break { break-before: page; }
+  footer { margin-top: 14pt; padding-top: 6pt; border-top: 1px solid var(--rule);
+           color: var(--muted); font-size: 8.5pt; }
+  .swatch { display: inline-block; width: 8pt; height: 8pt; border-radius: 2px;
+            vertical-align: -0.5pt; margin-right: 3pt; }
+</style>
+</head>
+<body>
+
+<h1>Predicting peptide-HLA complex stability with a multilayer perceptron</h1>
+<p class="byline">Technical report &middot; Rasmussen et al. dataset &middot; 3 October 2026</p>
+<p class="lede">A fully connected network regresses the logarithm of complex half-life from
+the stacked peptide and HLA pseudosequence. Trained independently on five constrained
+splits, it reaches a test RMSE of 1.17 &plusmn; 0.05 log units and a Spearman correlation
+of 0.770 &plusmn; 0.021, against 1.83 for a train-mean baseline. Error grows from 1.00 on
+test rows whose peptide and HLA both appear in training to 1.64 on rows carrying an HLA
+the model has never seen. The log offset &epsilon; was chosen by experiment
+(section 9): at 0.1 it improves rank correlation on all five splits relative to the
+0.001 used initially.</p>
+
+<h2>1. Data and splits</h2>
+<p>The source is <code>DATA/rasmussen_et_al_dataset.xlsx</code>, 28,166 measured
+peptide-HLA complexes with columns <code>allele</code>, <code>peptide</code> (9 residues),
+<code>thalf_hours</code>, <code>hla_seq</code> (182 residues) and
+<code>hla_pseudoseq</code> (34 residues). It contains 5,002-8,751 distinct peptides
+depending on the split and only 74 distinct HLA pseudosequences.</p>
+
+<p>Five train/test splits were produced beforehand by <code>split_dataset.py</code> and
+stored as NumPy archives. Each split is an independent 70/30 partition of all rows,
+constrained so that (i) at least 5 HLA sequences and 100 peptides occur only in the test
+set, and (ii) the train and test means of <span class="mono">ln(x)</span> and
+<span class="mono">ln(x)&sup2;</span> differ by at most 0.05 and 0.10. All five splits met
+both moment constraints on their first seed. They are not cross-validation folds: the
+holdouts are drawn independently, so test sets overlap between splits.</p>
+
+<table>
+  <caption>Table 1 &mdash; Row budget, identical for every split.</caption>
+  <thead><tr><th>Partition</th><th>Rows</th><th>Share</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td>Training</td><td>17,744</td><td>63.0%</td><td>Gradient steps</td></tr>
+    <tr><td>Validation</td><td>1,972</td><td>7.0%</td><td>Early stopping only</td></tr>
+    <tr><td>Testing</td><td>8,450</td><td>30.0%</td><td>Final scoring only</td></tr>
+    <tr class="total"><td>Total</td><td>28,166</td><td>100%</td><td></td></tr>
+  </tbody>
+</table>
+
+<p>The validation set was not part of the original splits; it is carved out of each
+training set inside the training script, by a seeded random permutation of rows
+(<code>--validation-fraction 0.1</code>). Its only use is to decide when to stop and
+which weights to keep. The test sets are read once, after training ends.</p>
+
+<div class="note">The validation draw is random over rows, so validation peptides and HLAs
+also occur in training. Validation loss is therefore easier than test loss and is not a
+generalization estimate &mdash; only the test figures in section 7 are.</div>
+
+<h2>2. Feature encoding</h2>
+<p>Each example is the peptide stacked with the HLA pseudosequence, one-hot encoded:</p>
+<ul>
+  <li><strong>Peptide</strong>: 9 positions, every peptide in the dataset is a 9-mer.</li>
+  <li><strong>HLA</strong>: the 34-residue pseudosequence, not the full 182-residue chain.
+      The pseudosequence keeps the residues lining the binding groove, so every input
+      position is informative. With only 74 distinct HLA sequences in the data, the longer
+      form would let the network treat the HLA block as an allele identifier and memorize
+      it, which is precisely what fails on unseen alleles.</li>
+  <li><strong>Alphabet</strong>: the 20 standard amino acids
+      (<span class="mono">ACDEFGHIKLMNPQRSTVWY</span>); an unrecognised residue raises an
+      error rather than being silently encoded as zeros.</li>
+</ul>
+<p>This gives (9 + 34) &times; 20 = <strong>860 binary input features</strong>. The
+encoding carries no notion of residue similarity: leucine and isoleucine are as unrelated
+as leucine and aspartate. A BLOSUM62 encoding, which would supply that similarity at the
+same input width, is the natural next experiment (section 10).</p>
+
+<h2>3. Target transform and zero handling</h2>
+<p>Half-lives span 0 to 256.7 hours, are strongly right-skewed (median 0.3 h among the
+non-zero values), and 5,679 rows &mdash; 20% of the dataset &mdash; are exactly zero.
+Regressing the raw value under a squared-error loss would let a handful of long-lived
+complexes dominate the gradient.</p>
+<p>The model therefore predicts</p>
+<pre>y = ln(thalf_hours + &epsilon;),   &epsilon; = 0.1</pre>
+<p>Adding &epsilon; inside the logarithm is the regularization of the singularity at zero:
+it is smooth and monotone over the whole range, unlike clamping, and it keeps the 20% of
+zero rows at a single finite value, ln(0.1) &asymp; &minus;2.30. It is exposed as
+<code>--epsilon</code>.</p>
+<p>The value 0.1&nbsp;h is the reporting resolution of the assay &mdash; half-lives are
+given to one decimal &mdash; so it encodes the statement that the data cannot distinguish
+a zero from any value below the detection limit. Section 9 reports the experiment behind
+the choice: an earlier draft of this work used &epsilon; = 0.001, which placed the zero
+rows 4.6 log units below a typical 0.1&nbsp;h measurement and let them dominate the loss.</p>
+<p>Targets are then standardized with the <em>training</em> mean and standard deviation
+of each split, which conditions the optimization; predictions are mapped back before
+scoring, so every error in this report is in natural-log units of hours.</p>
+
+<div class="note">&epsilon; sets how far the zero spike sits below the rest of the
+distribution, so it rescales every error in this report. Absolute errors are therefore
+comparable only between runs sharing the same &epsilon;, and not with published figures
+that use a different transform.</div>
+
+<h2 class="break">4. Architecture</h2>
+<p>A fully connected feed-forward network, ReLU activations, dropout after each hidden
+layer, single linear output. Three weight layers in total: two hidden, one output.</p>
+
+<table>
+  <caption>Table 2 &mdash; Layer stack and parameter count.</caption>
+  <thead><tr><th>#</th><th>Layer</th><th>Units in</th><th>Units out</th>
+    <th>Activation</th><th>Parameters</th></tr></thead>
+  <tbody>
+    <tr><td>&mdash;</td><td>Input (one-hot)</td><td>&mdash;</td><td>860</td><td>&mdash;</td><td>0</td></tr>
+    <tr><td>1</td><td>Linear + ReLU + Dropout 0.2</td><td>860</td><td>256</td><td>ReLU</td><td>220,416</td></tr>
+    <tr><td>2</td><td>Linear + ReLU + Dropout 0.2</td><td>256</td><td>128</td><td>ReLU</td><td>32,896</td></tr>
+    <tr><td>3</td><td>Linear (output)</td><td>128</td><td>1</td><td>identity</td><td>129</td></tr>
+    <tr class="total"><td></td><td>Total trainable</td><td></td><td></td><td></td><td>253,441</td></tr>
+  </tbody>
+</table>
+
+<p>The widths are set by <code>--hidden 256 128</code> and were not tuned; they are a
+deliberate baseline. The parameter count is about 14 times smaller than the 3.55 million
+distinct (peptide, HLA) pairs the training rows could in principle encode, but still large
+relative to 17,744 training rows, which is why the regularization below matters.</p>
+
+<h2>5. Training and regularization strategy</h2>
+<p>Four regularizing mechanisms act together; the first is about the target, the other
+three about the weights.</p>
+
+<dl class="keyval">
+  <dt>Target &epsilon;</dt><dd>0.1 added before the logarithm (section 3), removing the
+    singularity at zero without discarding the 20% of zero-stability rows.</dd>
+  <dt>Dropout</dt><dd>p = 0.2 after each hidden layer, active in training only.</dd>
+  <dt>Weight decay</dt><dd>1&times;10<sup>&minus;5</sup>, applied by Adam to all parameters.</dd>
+  <dt>Early stopping</dt><dd>Validation MSE is evaluated every epoch; the weights of the
+    best epoch are restored at the end. Training halts after 25 epochs without improvement,
+    or at 300 epochs.</dd>
+</dl>
+
+<table>
+  <caption>Table 3 &mdash; Optimization settings, identical across splits.</caption>
+  <thead><tr><th>Setting</th><th>Value</th><th>Setting</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Optimizer</td><td>Adam</td><td>Loss</td><td>MSE on standardized target</td></tr>
+    <tr><td>Learning rate</td><td>1&times;10<sup>&minus;3</sup></td><td>Batch size</td><td>256</td></tr>
+    <tr><td>Weight decay</td><td>1&times;10<sup>&minus;5</sup></td><td>Max epochs</td><td>300</td></tr>
+    <tr><td>Dropout</td><td>0.2</td><td>Patience</td><td>25 epochs</td></tr>
+    <tr><td>Target &epsilon;</td><td>0.1 h</td><td>Target scaling</td><td>Train mean and SD</td></tr>
+    <tr><td>Seed (split <em>i</em>)</td><td>0 + <em>i</em></td><td>Device</td><td>CPU</td></tr>
+  </tbody>
+</table>
+
+<p>No learning-rate schedule and no gradient clipping are used; the gradient norm is
+measured each step but left unmodified. Each split trains in 4-12 seconds on CPU, and runs
+are reproducible given the seed.</p>
+
+<h2>6. Convergence</h2>
+<p>Figure 1 shows, per split, the training and validation MSE in log units and the mean
+gradient L2 norm per epoch on a logarithmic axis. All five runs converge in the same way:
+the gradient norm rises over the first ~10 epochs as the weights leave their initialization,
+then decays monotonically; training loss flattens; validation loss reaches a plateau near
+1.0-1.2 and then drifts upward as the network begins to overfit, which is where early
+stopping intervenes.</p>
+
+<figure>
+  <img src="convergence.png" alt="Training and validation loss, and gradient norm, per epoch for each of the five splits.">
+  <figcaption><strong>Figure 1.</strong> Convergence per split. Top:
+    <span class="swatch" style="background:#2a78d6"></span>training and
+    <span class="swatch" style="background:#eb6834"></span>validation MSE, log units, shared
+    scale. Bottom: <span class="swatch" style="background:#1baf7a"></span>mean gradient L2
+    norm per epoch, logarithmic, shared scale. Dashed line: the restored early-stopping
+    epoch. Curves end where patience expired.</figcaption>
+</figure>
+
+<table>
+  <caption>Table 4 &mdash; Convergence summary. The gradient norm falls to roughly half its
+    peak in every run; none stopped at the 300-epoch ceiling.</caption>
+  <thead><tr><th>Split</th><th>Epochs run</th><th>Best epoch</th>
+    <th>Peak grad. norm</th><th>Final grad. norm</th><th>Best val. MSE</th>
+    <th>Time (s)</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>53</td><td>28</td><td>1.61</td><td>0.78</td><td>1.07</td><td>5.3</td></tr>
+    <tr><td>1</td><td>69</td><td>44</td><td>1.56</td><td>0.69</td><td>1.04</td><td>6.1</td></tr>
+    <tr><td>2</td><td>84</td><td>59</td><td>1.52</td><td>0.61</td><td>1.16</td><td>7.3</td></tr>
+    <tr><td>3</td><td>74</td><td>49</td><td>1.58</td><td>0.64</td><td>1.07</td><td>7.0</td></tr>
+    <tr><td>4</td><td>58</td><td>33</td><td>1.74</td><td>0.75</td><td>1.01</td><td>5.3</td></tr>
+  </tbody>
+</table>
+
+<p>The five runs are closely matched: 53-84 epochs, best weights at epoch 28-59, and best
+validation MSE within 1.01-1.16. The gradient norm plateaus rather than reaching zero,
+which is expected: dropout and mini-batch sampling keep a stochastic floor under it, so the
+diagnostic of convergence is the decay and flattening, not a vanishing value.</p>
+
+<h2 class="break">7. Generalization error</h2>
+<p>Each model is scored once on its own test set, after early stopping. Figure 2 and
+Table 5 report the mean over the five splits with the standard deviation as the error bar;
+individual splits are plotted as dots. The reference is a predictor that always returns the
+training mean, which isolates how much the sequences actually contribute.</p>
+
+<figure>
+  <img src="test_error.png" alt="Test error, test RMSE by subset, and test correlation, averaged over five splits with standard-deviation error bars.">
+  <figcaption><strong>Figure 2.</strong> Test performance across the five splits. Bars are
+    means, whiskers standard deviations, dots the individual splits. Left: error against the
+    train-mean baseline. Middle: RMSE by test subset. Right: rank and linear
+    correlation.</figcaption>
+</figure>
+
+<table>
+  <caption>Table 5 &mdash; Test metrics in natural-log units of hours, mean &plusmn; SD over
+    the five splits (n = 5).</caption>
+  <thead><tr><th>Metric</th><th>Split 0</th><th>Split 1</th><th>Split 2</th><th>Split 3</th>
+    <th>Split 4</th><th>Mean &plusmn; SD</th></tr></thead>
+  <tbody>
+    <tr><td>RMSE</td><td>1.080</td><td>1.194</td><td>1.194</td><td>1.207</td><td>1.157</td>
+      <td>1.166 &plusmn; 0.052</td></tr>
+    <tr><td>MAE</td><td>0.802</td><td>0.863</td><td>0.875</td><td>0.873</td><td>0.822</td>
+      <td>0.847 &plusmn; 0.033</td></tr>
+    <tr><td>Bias</td><td>0.049</td><td>&minus;0.208</td><td>&minus;0.010</td><td>0.008</td><td>&minus;0.079</td>
+      <td>&minus;0.048 &plusmn; 0.101</td></tr>
+    <tr><td>Pearson r</td><td>0.807</td><td>0.769</td><td>0.764</td><td>0.756</td><td>0.787</td>
+      <td>0.777 &plusmn; 0.020</td></tr>
+    <tr><td>Spearman &rho;</td><td>0.803</td><td>0.764</td><td>0.759</td><td>0.748</td><td>0.776</td>
+      <td>0.770 &plusmn; 0.021</td></tr>
+    <tr><td>Baseline RMSE</td><td>1.820</td><td>1.832</td><td>1.830</td><td>1.822</td><td>1.821</td>
+      <td>1.825 &plusmn; 0.006</td></tr>
+  </tbody>
+</table>
+
+<p>The model cuts RMSE by 36% relative to the baseline and ranks complexes with
+&rho; = 0.77, so the stacked sequences carry substantial signal. Mean bias is near zero and
+varies little by split (&minus;0.21 to +0.05), so there is no systematic offset; the
+calibration problem is conditional rather than global, as section 8 shows.</p>
+
+<h3>Breakdown by test subset</h3>
+<p>Test rows are grouped by whether their peptide and HLA pseudosequence were present
+anywhere in the training set. This is the comparison the constrained splits were designed
+to support.</p>
+
+<table>
+  <caption>Table 6 &mdash; Test RMSE by subset, mean &plusmn; SD over splits. Subset sizes
+    vary by split because holdout counts are minimums, not targets.</caption>
+  <thead><tr><th>Subset</th><th>Rows per split</th><th>RMSE, mean &plusmn; SD</th>
+    <th>vs. seen</th></tr></thead>
+  <tbody>
+    <tr><td>Seen peptide and HLA</td><td>5,695-6,389</td><td>1.001 &plusmn; 0.012</td><td>&mdash;</td></tr>
+    <tr><td>Unseen peptide</td><td>963-1,271</td><td>1.325 &plusmn; 0.137</td><td>+32%</td></tr>
+    <tr><td>Unseen HLA</td><td>1,126-1,837</td><td>1.640 &plusmn; 0.211</td><td>+64%</td></tr>
+    <tr class="total"><td>All test rows</td><td>8,450</td><td>1.166 &plusmn; 0.052</td><td>+16%</td></tr>
+  </tbody>
+</table>
+
+<p>Two results stand out. Generalization to <strong>unseen peptides</strong> costs 32% RMSE:
+with thousands of distinct 9-mers in training, the network learns position-wise peptide
+chemistry that transfers, if imperfectly. Generalization to <strong>unseen HLAs</strong>
+costs 64% and reaches 1.80 in the worst split, approaching the 1.83 of a model that ignores
+the sequences entirely. Performance on seen combinations is by contrast remarkably stable,
+RMSE 1.001 &plusmn; 0.012 across splits, so nearly all the split-to-split variation in the
+headline number comes from which alleles were withheld.</p>
+
+<div class="note">The unseen-HLA figure should be read as a weak estimate, not a stable
+benchmark: 5 held-out alleles per split, with overlapping test sets between splits, means
+the SD of 0.59 understates the true uncertainty across possible allele choices.</div>
+
+<h2 class="break">8. Structure of the error</h2>
+<p>Figure 3 plots every test prediction against its measurement, pooled over the five
+splits. The vertical stripes at the left are the discreteness of the assay: half-lives are
+reported to one decimal, so the measured axis has few distinct values there, the leftmost
+being the zero rows at ln(0.1).</p>
+
+<figure>
+  <img src="predicted_vs_true.png" alt="Hexagonally binned scatter of predicted against measured log half-life, and residuals against measured, pooled over the five splits.">
+  <figcaption><strong>Figure 3.</strong> Left: predicted against measured log half-life,
+    42,250 test rows binned hexagonally with a logarithmic count scale; dashed line is
+    equality, <span class="swatch" style="background:#eb6834"></span>the median prediction
+    per decile of the measurement. Right: the same data as residuals. The median line
+    crossing from above the dashed line to below it is the shrinkage described
+    below.</figcaption>
+</figure>
+
+<p>The cloud follows the diagonal but is visibly flatter than it, which is the signature of
+regression to the mean under a squared-error loss: the model compresses its predictions
+toward the centre of the distribution. The median prediction per decile sits above equality
+at the low end and below it at the high end, crossing near the middle of the range.</p>
+
+<table>
+  <caption>Table 7 &mdash; Squared error by measured half-life, mean &plusmn; SD over splits.
+    Shares sum to 100% within each split.</caption>
+  <thead><tr><th>Measured half-life</th><th>% of test rows</th><th>% of squared error</th>
+    <th>RMSE</th><th>Mean signed error</th></tr></thead>
+  <tbody>
+    <tr><td>= 0 h</td><td>20.1</td><td>24.7 &plusmn; 6.5</td><td>1.282</td><td>+0.847</td></tr>
+    <tr><td>(0, 0.5] h</td><td>17.9</td><td>12.4 &plusmn; 1.6</td><td>0.969</td><td>+0.300</td></tr>
+    <tr><td>(0.5, 2] h</td><td>22.5</td><td>17.5 &plusmn; 2.2</td><td>1.026</td><td>&minus;0.036</td></tr>
+    <tr><td>(2, 8] h</td><td>21.0</td><td>20.9 &plusmn; 1.7</td><td>1.166</td><td>&minus;0.510</td></tr>
+    <tr><td>&gt; 8 h</td><td>18.5</td><td>24.5 &plusmn; 6.9</td><td>1.336</td><td>&minus;0.846</td></tr>
+  </tbody>
+</table>
+
+<p>Error is distributed far more evenly across the range than under the earlier
+&epsilon; = 0.001, where the zero rows alone produced 47% of the squared error. What
+remains is a U shape: the two extremes of the distribution are hardest, and the signed
+errors confirm the shrinkage &mdash; zero-stability complexes are predicted too stable by
++0.85 log units, complexes above 8&nbsp;h too unstable by &minus;0.85, with the crossover
+in the (0.5, 2] stratum.</p>
+
+<h3>Read as a stability call</h3>
+<p>Thresholding the regression turns signed error into false positives (predicted stable,
+measured unstable) and false negatives. Which error dominates depends entirely on where the
+threshold is placed.</p>
+
+<table>
+  <caption>Table 8 &mdash; Stability call at three thresholds, mean counts and rates over
+    the five splits of 8,450 test rows.</caption>
+  <thead><tr><th>Threshold</th><th>False positives</th><th>False negatives</th>
+    <th>FP rate</th><th>FN rate</th><th>Precision</th><th>Recall</th></tr></thead>
+  <tbody>
+    <tr><td>&gt; 0.5 h</td><td>837</td><td>804</td><td>26.1%</td><td>15.4%</td><td>0.842</td><td>0.846</td></tr>
+    <tr><td>&gt; 1 h</td><td>848</td><td>823</td><td>20.2%</td><td>19.4%</td><td>0.802</td><td>0.806</td></tr>
+    <tr><td>&gt; 2 h</td><td>707</td><td>801</td><td>13.8%</td><td>24.1%</td><td>0.783</td><td>0.759</td></tr>
+  </tbody>
+</table>
+
+<p>At a 1-hour threshold the two error types are balanced. Below it false positives
+dominate, as the over-predicted zero and near-zero rows cross the line; above it false
+negatives dominate, as shrinkage pulls genuinely stable complexes below it. Screening for
+strongly stable complexes (&gt; 2 h) therefore loses about a quarter of them, which is the
+practical cost of the shrinkage and the main target for future work.</p>
+
+<h2 class="break">9. Choosing the log offset &epsilon;</h2>
+<p>&epsilon; is not a free parameter: it decides how far the 20% of zero-stability rows sit
+below the measurable ones, and therefore how much of the loss they absorb. Four values were
+trained on all five splits with every other setting fixed.</p>
+
+<p>Comparison is not straightforward, because &epsilon; changes the units of the target and
+so rescales RMSE directly &mdash; raw RMSE falls from 2.42 to 0.64 across this sweep almost
+entirely by rescaling. Two transform-independent measures are used instead: Spearman
+correlation, invariant under any monotone transform, and an RMSE computed after mapping
+every model's predictions back to hours and into one fixed space, ln(t + 0.1).</p>
+
+<table>
+  <caption>Table 9 &mdash; &epsilon; sweep, mean &plusmn; SD over the five splits. The last
+    column is the median predicted half-life for complexes measured at exactly zero.</caption>
+  <thead><tr><th>&epsilon;</th><th>Spearman &rho;</th><th>RMSE, common space</th>
+    <th>FN rate &gt; 2 h</th><th>FP rate &gt; 2 h</th><th>Median prediction at t = 0</th></tr></thead>
+  <tbody>
+    <tr><td>0.001</td><td>0.742 &plusmn; 0.015</td><td>1.292 &plusmn; 0.046</td><td>27.5%</td><td>14.7%</td><td>0.007 h</td></tr>
+    <tr><td>0.01</td><td>0.756 &plusmn; 0.025</td><td>1.224 &plusmn; 0.064</td><td>28.0%</td><td>12.6%</td><td>0.025 h</td></tr>
+    <tr class="total"><td>0.1 (adopted)</td><td>0.770 &plusmn; 0.021</td><td>1.164 &plusmn; 0.052</td><td>24.1%</td><td>13.9%</td><td>0.083 h</td></tr>
+    <tr><td>1.0</td><td>0.769 &plusmn; 0.020</td><td>1.155 &plusmn; 0.050</td><td>23.5%</td><td>14.0%</td><td>0.187 h</td></tr>
+  </tbody>
+</table>
+
+<p>The splits are paired, so per-split differences carry more information than the standard
+deviations. Against &epsilon; = 0.001, both 0.1 and 1.0 improve Spearman on <em>all five</em>
+splits (+0.028 on average), improve common-space RMSE on all five (&minus;0.13), and reduce
+the &gt; 2 h false-negative rate on all five (&minus;3.4 and &minus;4.0 points). The
+mechanism is the one Table 7 makes explicit: with a larger &epsilon; the zero rows stop
+monopolising the loss and the network spends its capacity on the measurable range.</p>
+
+<p>Between 0.1 and 1.0 there is nothing to choose statistically &mdash; the differences are
+well inside the split-to-split spread. <strong>0.1 was adopted</strong> on two grounds
+beyond the metrics:</p>
+<ul>
+  <li><strong>It matches the assay.</strong> Half-lives are reported to one decimal, so
+    0.1&nbsp;h is the resolution and plausibly the detection limit. &epsilon; = 0.1 states
+    that zero and 0.05&nbsp;h are indistinguishable, which is true of the data.</li>
+  <li><strong>&epsilon; = 1 flattens the low range.</strong> Since ln(1 + t) &asymp; t for
+    small t, the target becomes effectively linear in hours for the 58% of rows below
+    1&nbsp;h, discarding the log resolution that separates 0.1 from 0.5&nbsp;h. Its median
+    prediction for a truly-zero complex is 0.19&nbsp;h, nearly twice the assay
+    resolution.</li>
+</ul>
+
+<div class="note">Caveat: the architecture and learning rate were tuned for none of these
+settings, so some of the gap might close under retuning. More fundamentally, tuning
+&epsilon; is a workaround for a censoring problem &mdash; if zeros mean "below detection",
+the principled treatment is a censored likelihood that reads them as t &lt; 0.1 rather than
+t = 0.1.</div>
+
+<h2>10. Limitations and next steps</h2>
+<ol>
+  <li><strong>Censoring is handled by a constant, not a model.</strong> &epsilon; = 0.1 is
+    an informed choice (section 9) but still asserts a value for measurements that have
+    none. A censored likelihood, or the bounded transform
+    <span class="mono">s = 2<sup>&minus;t<sub>0</sub>/t</sup></span> used by NetMHCstabpan,
+    would treat the detection limit explicitly and make results comparable with the
+    literature.</li>
+  <li><strong>Predictions are shrunk toward the mean.</strong> The &plusmn;0.85 log-unit
+    bias at the extremes (Table 7, Figure 3) costs about a quarter of strongly stable
+    complexes at a 2-hour threshold. If a specific operating threshold matters, a
+    classifier at that threshold, or a two-stage binder-then-stability model, would likely
+    beat thresholding this regressor.</li>
+  <li><strong>Validation is optimistic.</strong> Holding out whole peptides and HLAs for
+    validation, mirroring how the test sets are built, would stop training at a point tuned
+    for unseen sequences; this most plausibly affects the unseen-HLA result.</li>
+  <li><strong>One-hot ignores residue similarity.</strong> BLOSUM62 encoding is a drop-in
+    replacement at the same input width and is the most likely single improvement for
+    unseen HLAs.</li>
+  <li><strong>No hyperparameter search.</strong> Widths, dropout, learning rate and weight
+    decay are untuned defaults. Any search must use the validation sets only.</li>
+  <li><strong>Few HLAs.</strong> With 74 pseudosequences, allele-level generalization cannot
+    be estimated precisely from 5 held-out alleles per split; leave-one-allele-out over all
+    74 would measure it properly, at 74 training runs.</li>
+  <li><strong>Date-recovered targets.</strong> 11,907 of 28,166 half-lives (42%) were stored
+    as dates in the source workbook and recovered as <span class="mono">day.month</span> by
+    the splitting script. The recovery is consistent with one-decimal values, but it is
+    lossy in principle and worth confirming against the original publication.</li>
+</ol>
+
+<h2>11. Reproducing this work</h2>
+<pre>cd peptide-HLA-stability
+.venv/bin/python split_dataset.py DATA/rasmussen_et_al_dataset.xlsx --thresholds 0.05 0.1
+.venv/bin/python train_mlp.py --splits-dir DATA --output-dir RESULTS
+.venv/bin/python analyze_errors.py --splits-dir DATA --results-dir RESULTS</pre>
+<p>Figures 1 and 2 and <span class="mono">metrics.json</span> come from the second command,
+Figure 3 and the error decomposition from the third. &epsilon; = 0.1 is the default; the
+sweep in section 9 is reproduced by passing <code>--epsilon</code> and a separate output
+directory.</p>
+
+<table>
+  <caption>Table 10 &mdash; Files produced.</caption>
+  <thead><tr><th>Path</th><th>Contents</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">DATA/training_i.npz, testing_i.npz</td>
+        <td>The five splits, i = 0&hellip;4, one array per column</td></tr>
+    <tr><td class="mono">DATA/split/</td>
+        <td>Splitting script's own workbooks, metadata and log-distribution plots</td></tr>
+    <tr><td class="mono">RESULTS/mlp_split_i.pt</td>
+        <td>Restored best weights plus the target transform constants</td></tr>
+    <tr><td class="mono">RESULTS/metrics.json</td>
+        <td>Full configuration, per-epoch histories and every metric in this report</td></tr>
+    <tr><td class="mono">RESULTS/convergence.png, test_error.png</td>
+        <td>Figures 1 and 2</td></tr>
+    <tr><td class="mono">RESULTS/predicted_vs_true.png</td>
+        <td>Figure 3</td></tr>
+    <tr><td class="mono">RESULTS/error_decomposition.png, .json</td>
+        <td>Strata and stability calls behind Tables 7 and 8</td></tr>
+  </tbody>
+</table>
+
+<p>Environment: Python 3.14.2, PyTorch 2.14.1, NumPy 2.5.3, pandas 3.0.6, Matplotlib 3.11.2,
+CPU only. Seeds are fixed (split <em>i</em> uses seed <em>i</em> for the validation draw,
+weight initialization and batch order), so the numbers above reproduce exactly.</p>
+
+<footer>Generated from <span class="mono">RESULTS/metrics.json</span>; all metrics quoted
+are taken from that file. Source: <span class="mono">RESULTS/report.html</span>.</footer>
+
+</body>
+</html>
