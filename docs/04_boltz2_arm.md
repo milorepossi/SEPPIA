@@ -193,13 +193,13 @@ hf jobs uv run hf/bench_boltz.py --flavor l4x1 --timeout 50m \
   --volume hf://buckets/<user>/boltz-cache:/bcache:rw \
   -- --cache /bcache/boltz --out /bcache/bench_report.json --skip-msa-server
 
-# extract the pilot (one job, ~$4.83 at the measured 7.73 s/complex)
+# extract the pilot (one job, ~$5.89 at the measured end-to-end 9.41 s/complex)
 hf jobs uv run hf/extract_job.py --flavor l4x1 --timeout 8h \
   --volume hf://buckets/<user>/boltz-cache:/bcache:rw \
   -- --dataset /bcache/inputs/rasmussen_clean.csv \
      --source-rows /bcache/inputs/pilot_source_rows.json \
      --out-dir /bcache/boltz_pilot --boltz-cache /bcache/boltz \
-     --scripts-dir /bcache/scripts --max-seconds 25200
+     --scripts-dir /bcache/scripts --batch-size 256 --max-seconds 28800
 
 # score an arm on the existing five splits, head unchanged
 python train_mlp.py --arm BZZ --embeddings-dir <boltz cache> --pooling pca:20
@@ -211,8 +211,13 @@ from exactly where it stopped, guarded by the fingerprint.
 
 ## 11. Open items
 
-- The pilot extraction has not been run at scale yet; only the 16-complex
-  end-to-end validation and the 12-complex benchmark have.
+- The pilot extraction has not been run at scale yet. The 16-complex
+  end-to-end validation passed (16/16 rows, 9.41 s/complex, peak magnitudes
+  1383/294/215 against the float16 ceiling of 65504) and the 12-complex
+  benchmark is in BENCHMARK.md.
+- Each batch spawns a fresh `boltz predict` that reloads the 2.3 GB checkpoint,
+  so `--batch-size` should be large (256) to amortise it. The 9.41 s/complex
+  was measured at batch 16 and is therefore conservative.
 - `A0` must be **re-scored on the pilot rows only** before any B-arm number is
   interpreted. B arms see 2,814 rows against A0-A3's 28,166, so a B-arm loss is
   not evidence about Boltz-2 until the comparison is row-matched.
