@@ -7,6 +7,10 @@ Status: **implemented and validated.** A0 runs end to end. A1–A3 are
 implemented and their code path is verified, but the comparison itself is
 pending the full embedding cache (§8).
 
+- **To run it:** §9 — one process per layer, all five splits each.
+- **If the cache was extracted on another machine:** §10.
+- **The decision that actually matters:** §5, pooling.
+
 ---
 
 ## 1. What the ladder tests
@@ -226,16 +230,7 @@ Measured sensitivity, split 0, for reference:
 across the three layers, about 21 minutes total. Modal is therefore not on the
 critical path for a first result.
 
-Once it lands:
-
-```bash
-python train_mlp.py --output-dir RESULTS/A0_onehot
-for arm in L0 L15 L33; do
-  python train_mlp.py --arm $arm --pooling pca:20 --output-dir RESULTS/A_$arm
-done
-python scripts/compare_arms.py RESULTS/A0_onehot RESULTS/A_L0 \
-    RESULTS/A_L15 RESULTS/A_L33 --csv RESULTS/ladder.csv
-```
+Once it lands, run the ladder as described in §9.
 
 ### Known limitations, to settle before reading the comparison
 
@@ -264,3 +259,94 @@ python scripts/compare_arms.py RESULTS/A0_onehot RESULTS/A_L0 \
 - **A0 vs A1** — a pipeline check, not a result. Under `pca:20` they are
   information-matched, so they should land within noise. A large gap means a
   bug or a conditioning problem, not a discovery.
+
+---
+
+## 9. Running the ladder — one layer per process
+
+**Shard by layer, not by split.** Each `--arm` run already does all five
+splits, so one process per layer is the right granularity and needs no extra
+flags.
+
+```bash
+# A0 needs no GPU and no embedding cache
+python train_mlp.py --output-dir RESULTS/A0_onehot
+
+# one process per layer, concurrently
+python train_mlp.py --arm L0  --pooling pca:20 --device cuda:0 --output-dir RESULTS/A1_L0
+python train_mlp.py --arm L15 --pooling pca:20 --device cuda:1 --output-dir RESULTS/A2_L15
+python train_mlp.py --arm L33 --pooling pca:20 --device cuda:2 --output-dir RESULTS/A3_L33
+
+python scripts/compare_arms.py RESULTS/A0_onehot RESULTS/A1_L0 \
+    RESULTS/A2_L15 RESULTS/A3_L33 --csv RESULTS/ladder.csv
+```
+
+Each run writes a **complete five-split `metrics.json`**, so `compare_arms.py`
+reads the four directories directly and **nothing needs merging**. Sharding at
+the split level would fragment `metrics.json` and require a merge step for no
+gain, since a whole arm takes only a few minutes.
+
+### Three things to get right
+
+1. **A distinct `--output-dir` per arm.** Concurrent runs otherwise overwrite
+   each other's `metrics.json`, figures and `mlp_split_*.pt`.
+2. **The same `--pooling` and `--standardise` for every arm**, or the
+   comparison is not budget-matched. `compare_arms.py` rejects runs whose
+   `hidden`, `epsilon` or split count differ, but it cannot treat a pooling
+   mismatch as an error — it only prints it in the arm label, so this one is on
+   the operator.
+3. **~4 GB RAM per shard** under `pca:20`: the cache is memory-mapped and
+   concurrent reads are safe, but each process materialises the training rows
+   as float32. Under `flatten` it is ~15.6 GiB per shard, so three concurrent
+   `flatten` runs need ~47 GiB.
+
+### These runs are not GPU bound
+
+The head is `860 → 256 → 128 → 1` on ~17.7k rows — negligible compute. The time
+goes to reading and pooling 3.1 GB per layer, which is **CPU and I/O bound**.
+The speedup comes from running three *processes*; three separate GPUs are not
+required, and pointing all three at `--device cuda:0` performs about the same.
+Worth knowing before reserving hardware.
+
+---
+
+## 10. Using an embedding cache extracted elsewhere
+
+A collaborator who extracted on another machine needs the cache directory to
+hold `concat_L{0,15,33}.npy` and `index.json` together, passed as
+`--embeddings-dir`. Three failure modes are handled explicitly:
+
+| Situation | Behaviour |
+|---|---|
+| Cache extracted **before** `source_row` followed `split_dataset.py` (pre-`1d68d28`) | Refused with the convention named and the repair command; see below |
+| A layer array missing | Refused, naming the `extract_embeddings.py --layers` call that builds it |
+| Cache covers only some rows (a `--limit` run) | Refused, listing the absent `source_row` values |
+
+The arrays from a pre-fix extraction are **still valid** — row order never
+changed, only the `source_row` labels — so the index is repaired in place
+rather than re-extracting 8.66 GiB:
+
+```bash
+python scripts/features.py DATA/rasmussen_et_al_dataset.xlsx \
+    --out-dir <embeddings-dir> --repair-index
+```
+
+Repair, not delete-and-rebuild: `features.py` only knows about its own arm and
+would stamp `model="onehot"` over an ESM-2 cache. `--repair-index` rewrites
+`source_row` and nothing else, preserving the recorded model and layer list, and
+refuses unless the stored `pairs` still match the dataset in the same order —
+which is what makes the arrays trustworthy afterwards.
+
+The run line and `metrics.json` now record the cache's model and width:
+
+```
+[L33] split 0: 860 features from esm2_t33_650M_UR50D d=1280  best epoch ...
+```
+
+That is there because a cache built with the 8M development model would
+otherwise be used silently at `d=320` instead of `d=1280`, which is invisible in
+every other output.
+
+Dependencies for a PLM arm are only numpy, pandas and torch — `fair-esm` is
+needed to *build* a cache, not to train on one, since `extract_embeddings`
+imports torch and esm lazily.
