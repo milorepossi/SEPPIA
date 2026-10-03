@@ -155,3 +155,11 @@ Extraction is the cheap half. With sharding, the full extraction is about
 - **The MSA module and input embedder** in the fine-tune step cost.
 - **Concurrency above 8**, and the start-up-free steady-state rate. Both are
   what `refine` measures; its numbers supersede section 2 where they differ.
+- **CPU allocation per container.** The `refine` pass at concurrency 6 on an L4
+  ran markedly slower than concurrency 4 did in the sweep, which points at CPU
+  starvation rather than a GPU limit: six `boltz predict` processes each spawn
+  `--num_workers 2` dataloader workers, and the Modal functions here request no
+  explicit `cpu=`, so they get the default allocation. Before raising
+  concurrency past 4, request CPU in proportion
+  (`@app.function(gpu=..., cpu=4*2)`) and re-measure. This is the likeliest
+  reason the large cards did not scale as far as their memory allows.
