@@ -255,6 +255,7 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
                 standardised=standardiser is not None,
                 explained_variance=explained_variance,
                 cache_model=cache_model, cache_dim=cache_dim,
+                fitted_state=arm_features.fitted_state(encoder, standardiser),
                 train_rows=int(len(x_train)), validation_rows=int(len(x_validation)),
                 test_rows=int(len(x_test)), features=int(x_train.shape[1]),
                 target_center=center, target_scale=scale,
@@ -444,12 +445,19 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
             hidden=tuple(hidden), validation_fraction=validation_fraction, device=device,
             arm=arm, embeddings_dir=embeddings_dir, pooling=pooling,
             standardise=standardise)
+        # Tensors, so they belong in the checkpoint and not in metrics.json.
+        fitted_state = result.pop('fitted_state')
         if save_models:
             torch.save(dict(state_dict=model.state_dict(), hidden=tuple(hidden),
                             dropout=dropout, features=result['features'],
                             target_center=result['target_center'],
                             target_scale=result['target_scale'], epsilon=epsilon,
-                            arm=arm, pooling=pooling),
+                            arm=arm, pooling=pooling, standardise=standardise,
+                            embeddings_dir=(None if arm == arm_features.ONEHOT_ARM
+                                            else str(Path(embeddings_dir).resolve())),
+                            # The fitted feature transforms, without which a
+                            # reloaded PLM model cannot rebuild its own inputs.
+                            **fitted_state),
                        out/f'mlp_split_{index}.pt')
         print(f"[{arm}] split {index}: {result['features']} features"
               + (f" from {result['cache_model']} d={result['cache_dim']}"

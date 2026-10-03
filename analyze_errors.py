@@ -19,6 +19,7 @@ import pandas as pd
 import torch
 
 from train_mlp import COLORS, MLP, features_and_target, style_axes
+import arm_features
 
 # Upper edges in hours; the zero spike is kept apart from the measurable rows.
 BINS = [('= 0', 0.0, 0.0), ('(0, 0.5]', 0.0, 0.5), ('(0.5, 2]', 0.5, 2.0),
@@ -80,7 +81,7 @@ def confusion(half_life, predicted_half_life, threshold):
                 accuracy=(tp+tn)/len(truth))
 
 
-def analyze(splits_dir='DATA', results_dir='RESULTS', splits=5):
+def analyze(splits_dir='DATA', results_dir='RESULTS', splits=5, embeddings_dir=None):
     per_split = []
     for index in range(splits):
         with np.load(Path(splits_dir)/f'testing_{index}.npz') as data:
@@ -90,7 +91,17 @@ def analyze(splits_dir='DATA', results_dir='RESULTS', splits=5):
         # epsilons, while the stability calls below are, being made in hours.
         model, checkpoint = load_model(results_dir, index)
         epsilon = checkpoint['epsilon']
-        x_test, y_test, _ = features_and_target(test, epsilon)
+        # Rebuild the features the model was trained on. Without this a PLM arm
+        # would be scored on one-hot inputs, and under pca:20 that is 860 wide
+        # just like arm A0, so it would not even raise.
+        encoder, standardiser = arm_features.from_checkpoint(checkpoint, embeddings_dir)
+        x_test, y_test, _ = features_and_target(test, epsilon, encoder=encoder)
+        if standardiser is not None:
+            x_test = standardiser(x_test)
+        if x_test.shape[1] != checkpoint['features']:
+            raise ValueError(
+                f"split {index}: rebuilt {x_test.shape[1]} features but the checkpoint "
+                f"was trained on {checkpoint['features']}")
         predicted = predict(model, checkpoint, x_test)
         error = predicted-y_test
         half_life = test['thalf_hours'].astype(np.float64)
@@ -241,8 +252,12 @@ def main():
     parser.add_argument('--splits-dir', default='DATA')
     parser.add_argument('--results-dir', default='RESULTS')
     parser.add_argument('--splits', type=int, default=5)
+    parser.add_argument('--embeddings-dir', default=None,
+                        help='Override the embedding cache recorded in the '
+                             'checkpoint; needed only if it has moved')
     args = parser.parse_args()
-    per_split = analyze(args.splits_dir, args.results_dir, args.splits)
+    per_split = analyze(args.splits_dir, args.results_dir, args.splits,
+                        args.embeddings_dir)
     out = Path(args.results_dir)
     figure(per_split, out/'error_decomposition.png')
     scatter_figure(per_split, out/'predicted_vs_true.png', per_split[0]['epsilon'])

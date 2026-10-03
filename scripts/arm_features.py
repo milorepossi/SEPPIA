@@ -247,9 +247,9 @@ class CachedArmEncoder:
 class Standardiser:
     """Per-column centring and scaling, fitted on the training rows only."""
 
-    def __init__(self):
-        self.center = None
-        self.scale = None
+    def __init__(self, center=None, scale=None):
+        self.center = center
+        self.scale = scale
 
     def fit(self, features):
         self.center = features.mean(axis=0)
@@ -264,6 +264,66 @@ class Standardiser:
         if self.center is None:
             raise RuntimeError("fit() the standardiser on the training rows first")
         return ((features-self.center)/self.scale).astype(np.float32)
+
+
+def fitted_state(encoder, standardiser):
+    """The fitted feature transforms, as torch tensors for a checkpoint.
+
+    Tensors rather than numpy arrays so the checkpoint still loads under
+    torch.load(weights_only=True), which rejects arbitrary numpy objects.
+    Without this a reloaded PLM model cannot reproduce its own features.
+    """
+    import torch
+
+    state = {}
+    if encoder is not None and encoder.projection is not None:
+        center, components = encoder.projection
+        state["projection"] = dict(center=torch.from_numpy(np.asarray(center)),
+                                   components=torch.from_numpy(np.asarray(components)))
+    if standardiser is not None:
+        state["standardiser"] = dict(center=torch.from_numpy(np.asarray(standardiser.center)),
+                                     scale=torch.from_numpy(np.asarray(standardiser.scale)))
+    return state
+
+
+def from_checkpoint(checkpoint, embeddings_dir=None):
+    """Rebuild (encoder, standardiser) so a saved model sees its own features.
+
+    A checkpoint with no arm predates the ladder and is arm A0, whose features
+    are rebuilt in-memory, so both are None. For a PLM arm this refuses rather
+    than guessing: scoring a pca:20 model on one-hot features would not even
+    raise, since both are 860 wide, and the numbers would be silently wrong.
+    """
+    arm = checkpoint.get("arm", ONEHOT_ARM)
+    if arm == ONEHOT_ARM:
+        return None, None
+
+    pooling = checkpoint.get("pooling", "flatten")
+    directory = embeddings_dir or checkpoint.get("embeddings_dir")
+    if directory is None:
+        raise ValueError(
+            f"checkpoint is arm {arm} but records no embeddings_dir; pass one explicitly")
+
+    encoder = CachedArmEncoder(directory, arm, pooling)
+    mode, _ = parse_pooling(pooling)
+    if mode == "pca":
+        saved = checkpoint.get("projection")
+        if saved is None:
+            raise ValueError(
+                f"checkpoint is arm {arm} with pooling {pooling} but stores no fitted "
+                "projection, so its features cannot be reproduced. Retrain with the "
+                "current train_mlp.py, which saves it.")
+        encoder.projection = (np.asarray(saved["center"]), np.asarray(saved["components"]))
+
+    standardiser = None
+    saved = checkpoint.get("standardiser")
+    if saved is not None:
+        standardiser = Standardiser(np.asarray(saved["center"]), np.asarray(saved["scale"]))
+    elif should_standardise(arm, checkpoint.get("standardise", "auto")):
+        raise ValueError(
+            f"checkpoint is arm {arm} and was standardised, but stores no standardiser. "
+            "Retrain with the current train_mlp.py.")
+    return encoder, standardiser
 
 
 def should_standardise(arm, policy):
