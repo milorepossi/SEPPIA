@@ -273,25 +273,55 @@ class CachedArmEncoder:
 
 # --- Feature standardisation --------------------------------------------------
 class Standardiser:
-    """Per-column centring and scaling, fitted on the training rows only."""
+    """Per-column centring and scaling, fitted on the training rows only.
+
+    Two guards, both needed because of what these features look like. A layer-0
+    flatten block has ~3.4k exactly constant columns and another ~3.1k whose
+    training standard deviation is between 1e-8 and 1e-4: layer 0 is a
+    per-residue lookup and the HLA pseudosequence positions are highly
+    conserved, so most rows carry the same residue there. An absolute guard at
+    1e-8 lets those through, and a test row with a rare residue is then divided
+    by ~1e-8. Measured on arm L0 split 1: training max|z| 71, test max|z|
+    4,345,694, with 220 of 8450 test rows over 100. A handful of exploded
+    predictions leaves Spearman intact and ruins RMSE, which is exactly how
+    this surfaced (RMSE 7.104 against ~1.15 for every other arm).
+
+      - RELATIVE_FLOOR: a column whose deviation is negligible against the
+        typical column carries no signal, only quantisation noise, so it is
+        left centred at zero instead of being amplified.
+      - CLIP: whatever survives is bounded, so one unseen residue in a
+        near-constant column cannot dominate the loss.
+
+    Both act only on pathological columns; a normally-scaled feature is
+    untouched.
+    """
+
+    RELATIVE_FLOOR = 1e-3   # times the median column deviation
+    CLIP = 10.0             # standard deviations
 
     def __init__(self, center=None, scale=None):
         self.center = center
         self.scale = scale
 
     def fit(self, features):
-        self.center = features.mean(axis=0)
+        center = features.mean(axis=0)
         scale = features.std(axis=0)
-        # Constant columns carry no information; leave them centred at zero
-        # rather than dividing by ~0 and amplifying noise.
-        self.scale = np.where(scale > 1e-8, scale, 1.0).astype(np.float32)
-        self.center = self.center.astype(np.float32)
+        positive = scale[scale > 0]
+        floor = self.RELATIVE_FLOOR*float(np.median(positive)) if positive.size else 0.0
+        # Columns at or below the floor are treated as constant (scale 1), so
+        # centring alone sends them to ~0.
+        self.scale = np.where(scale > floor, scale, 1.0).astype(np.float32)
+        self.center = center.astype(np.float32)
+        self.floor = floor
+        self.n_constant = int((scale <= floor).sum())
         return self
 
     def __call__(self, features):
         if self.center is None:
             raise RuntimeError("fit() the standardiser on the training rows first")
-        return ((features-self.center)/self.scale).astype(np.float32)
+        standardised = (features-self.center)/self.scale
+        np.clip(standardised, -self.CLIP, self.CLIP, out=standardised)
+        return standardised.astype(np.float32)
 
 
 def fitted_state(encoder, standardiser):

@@ -182,13 +182,20 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
     x_test, y_test, _ = features_and_target(test_raw, epsilon, encoder=encoder)
     x_train, y_train = x_all[train_idx], y_all[train_idx]
     x_validation, y_validation = x_all[validation_idx], y_all[validation_idx]
+    # The split copies are independent of x_all, and under flatten pooling it is
+    # another 4 GiB of the ~15 GiB peak. Releasing it here keeps a node with a
+    # loaded page cache from evicting the memory-mapped arrays, which cost one
+    # run 1182s a split instead of 210s.
+    del x_all, y_all
 
     standardiser = None
     if arm_features.should_standardise(arm, standardise):
         standardiser = arm_features.Standardiser().fit(x_train)
-        x_train, x_validation, x_test = (standardiser(x_train),
-                                         standardiser(x_validation),
-                                         standardiser(x_test))
+        # One at a time, rebinding as we go, so only one unstandardised copy is
+        # alive at a time rather than all three.
+        x_train = standardiser(x_train)
+        x_validation = standardiser(x_validation)
+        x_test = standardiser(x_test)
 
     # Standardize the target with training statistics only; errors are reported
     # back in log units.
