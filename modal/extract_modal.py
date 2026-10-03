@@ -22,7 +22,14 @@ import modal
 
 HERE = pathlib.Path(__file__).parent
 REPO = HERE.parent
-GPU = "L4"            # set from the sweep's $/complex winner
+# From modal/sweep_results.json: L4 is cheapest per complex ($0.001364 at
+# concurrency 4) even though L40S/H100/B200 are 2-3x faster, because Modal
+# fans out and wall clock is bought with shards rather than a bigger card.
+GPU = "L4"
+WORKERS = 4           # concurrent boltz processes per GPU; ~3 GiB each
+CPU = 4.0 * 2.5       # CPU in proportion to workers: each spawns dataloader
+                      # threads, and starving them was measured to cost more
+                      # than the GPU does
 SHARD_TIMEOUT = 8 * 3600
 
 image = (
@@ -42,11 +49,13 @@ app = modal.App("boltz-pmhc-extract", image=image)
 cache = modal.Volume.from_name("boltz-pmhc-cache", create_if_missing=True)
 
 
-@app.function(gpu=GPU, volumes={"/cache": cache}, timeout=SHARD_TIMEOUT,
+@app.function(gpu=GPU, cpu=CPU, memory=24576, volumes={"/cache": cache},
+              timeout=SHARD_TIMEOUT,
               retries=modal.Retries(max_retries=2, backoff_coefficient=1.0))
 def extract_shard(shard: int, n_shards: int, source_rows: list[int],
                   out_root: str, batch_size: int = 256,
                   sampling_steps: int = 10, recycling_steps: int = 3,
+                  workers: int = WORKERS,
                   max_seconds: float | None = None) -> str:
     import json
     import sys
@@ -68,7 +77,8 @@ def extract_shard(shard: int, n_shards: int, source_rows: list[int],
             "/app/rasmussen_clean.csv", out_dir, source_rows=mine,
             boltz_cache="/cache/boltz", work_dir=f"/tmp/wk{shard}",
             batch_size=batch_size, sampling_steps=sampling_steps,
-            recycling_steps=recycling_steps, resume=True, progress_callback=guard)
+            recycling_steps=recycling_steps, workers=workers,
+            resume=True, progress_callback=guard)
     except KeyboardInterrupt:
         summary = {"stopped_on_budget": True}
     finally:
@@ -101,9 +111,10 @@ def run(rows: str = "DATA/pilot_source_rows.json", shards: int = 8,
     source_rows = json.loads(pathlib.Path(rows).read_text())
     if limit:
         source_rows = source_rows[:limit]
-    print(f"{len(source_rows)} complexes over {shards} shards on {GPU}", flush=True)
+    print(f"{len(source_rows)} complexes over {shards} shards on {GPU}, "
+          f"{WORKERS} concurrent boltz workers each", flush=True)
 
-    args = [(s, shards, source_rows, out_root, batch_size, 10, 3,
+    args = [(s, shards, source_rows, out_root, batch_size, 10, 3, WORKERS,
              max_seconds or None) for s in range(shards)]
     total_gpu_seconds = 0.0
     for raw in extract_shard.starmap(args):

@@ -320,6 +320,56 @@ def check_free_space(out_dir: Path, n_rows: int, n_slots: int) -> dict:
 # --------------------------------------------------------------------------- #
 # driver
 # --------------------------------------------------------------------------- #
+def boltz_cmd(in_dir: Path, out_dir: Path, cache: Path, *, sampling_steps: int,
+              recycling_steps: int, use_msa_server: bool, num_workers: int,
+              no_kernels: bool = True,
+              extra_args: list[str] | None = None) -> list[str]:
+    """The argv for one `boltz predict` invocation."""
+    cmd = [
+        "boltz", "predict", str(in_dir),
+        "--out_dir", str(out_dir),
+        "--cache", str(cache),
+        "--write_embeddings",
+        "--output_format", "pdb",
+        "--sampling_steps", str(sampling_steps),
+        "--recycling_steps", str(recycling_steps),
+        "--diffusion_samples", "1",
+        "--num_workers", str(num_workers),
+        "--override",
+        *(extra_args or []),
+    ]
+    if no_kernels:
+        cmd.append("--no_kernels")
+    if use_msa_server:
+        cmd.append("--use_msa_server")
+    return cmd
+
+
+def run_boltz_parallel(jobs: list[tuple[Path, Path]], cache: Path, **kw) -> None:
+    """Run several `boltz predict` processes concurrently on one GPU.
+
+    This is where most of the money is saved. One process badly under-occupies
+    any GPU at 191 tokens: measured on Modal, an L4 goes from 14.4 to 6.1
+    s/complex between 1 and 4 concurrent workers, and an H100 from 8.7 to 2.0
+    at 8. Each worker holds its own ~2.8-3.5 GiB copy of the model, so the
+    ceiling is device memory -- and, as the benchmark also found, the
+    container's CPU allocation, since every worker spawns its own dataloader
+    threads.
+    """
+    procs = [(subprocess.Popen(boltz_cmd(i, o, cache, **kw),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               text=True), i)
+             for i, o in jobs]
+    failures = []
+    for proc, in_dir in procs:
+        out, err = proc.communicate()
+        if proc.returncode != 0:
+            failures.append(f"{in_dir.name}:\n{out[-800:]}\n{err[-2500:]}")
+    if failures:
+        raise RuntimeError("boltz predict failed in %d/%d workers\n%s"
+                           % (len(failures), len(procs), "\n---\n".join(failures)))
+
+
 def run_boltz(in_dir: Path, out_dir: Path, cache: Path, *, sampling_steps: int,
               recycling_steps: int, use_msa_server: bool, num_workers: int,
               no_kernels: bool = True, extra_args: list[str] | None = None) -> None:
@@ -365,7 +415,7 @@ def locate_outputs(boltz_out: Path, rid: str) -> tuple[Path, Path]:
 def extract(dataset_path, out_dir, *, source_rows=None, msa_dir=None,
             boltz_cache=None, work_dir=None, batch_size=32, sampling_steps=10,
             recycling_steps=3, use_msa_server=False, num_workers=2,
-            no_kernels=True, limit=None, resume=True,
+            workers=4, no_kernels=True, limit=None, resume=True,
             progress_callback=None) -> dict:
     """Extract and cache Boltz-2 trunk features. Returns a summary dict.
 
@@ -409,6 +459,7 @@ def extract(dataset_path, out_dir, *, source_rows=None, msa_dir=None,
 
     summary = {"n_rows": len(rows), "n_slots": n_slots, "resumed_at": done,
                "sampling_steps": sampling_steps, "recycling_steps": recycling_steps,
+               "workers": workers,
                **space, "batches": [], "max_abs": {k: 0.0 for k in ARRAYS}}
     # The cache is float16 (ceiling 65504). ESM-2 layer 15 peaked at 223, but
     # Boltz-2's z is a different distribution and its range is not documented,
@@ -419,17 +470,39 @@ def extract(dataset_path, out_dir, *, source_rows=None, msa_dir=None,
 
     for start in range(done, len(rows), batch_size):
         chunk = rows[start:start + batch_size]
-        in_dir = work_dir / "yaml"
         boltz_out = work_dir / "boltz_out"
         if boltz_out.exists():
             shutil.rmtree(boltz_out)
-        ids = build_batch_inputs(chunk, in_dir, msa_dir)
+
+        # Split the batch across `workers` concurrent boltz processes on the one
+        # GPU. This is the main cost lever: measured on Modal, an L4 drops from
+        # 14.4 to 6.1 s/complex going from 1 to 4 workers. Round-robin rather
+        # than contiguous slices so every worker gets a mix of alleles and no
+        # single worker inherits a pathological tail.
+        n_workers = max(1, min(workers, len(chunk)))
+        sub_chunks = [chunk[w::n_workers] for w in range(n_workers)]
+        jobs, ids_per_worker = [], []
+        for w, sub in enumerate(sub_chunks):
+            if not sub:
+                continue
+            in_dir = work_dir / f"yaml_{w}"
+            ids_per_worker.append(build_batch_inputs(sub, in_dir, msa_dir))
+            jobs.append((in_dir, boltz_out / f"w{w}"))
 
         t0 = time.monotonic()
-        run_boltz(in_dir, boltz_out, boltz_cache, sampling_steps=sampling_steps,
-                  recycling_steps=recycling_steps, use_msa_server=use_msa_server,
-                  num_workers=num_workers, no_kernels=no_kernels)
+        run_boltz_parallel(jobs, boltz_cache, sampling_steps=sampling_steps,
+                           recycling_steps=recycling_steps,
+                           use_msa_server=use_msa_server,
+                           num_workers=num_workers, no_kernels=no_kernels)
         predict_seconds = time.monotonic() - t0
+
+        # Rebuild the batch-local order so each record lands at its own row.
+        ids = [None] * len(chunk)
+        for w, worker_ids in enumerate(ids_per_worker):
+            for j, rid in enumerate(worker_ids):
+                ids[j * n_workers + w] = rid
+        if any(r is None for r in ids):
+            raise RuntimeError("worker id reassembly left a gap")
 
         for offset, rid in enumerate(ids):
             emb, pdb = locate_outputs(boltz_out, rid)
@@ -485,7 +558,12 @@ def main() -> int:
     ap.add_argument("--sampling-steps", type=int, default=10)
     ap.add_argument("--recycling-steps", type=int, default=3)
     ap.add_argument("--use-msa-server", action="store_true")
-    ap.add_argument("--num-workers", type=int, default=2)
+    ap.add_argument("--num-workers", type=int, default=2,
+                    help="boltz dataloader workers per process")
+    ap.add_argument("--workers", type=int, default=4,
+                    help="concurrent boltz processes on the one GPU; the main "
+                         "cost lever (L4: 14.4 s/cx at 1, 6.1 at 4). Capped by "
+                         "device memory (~3 GiB each) and container CPU")
     ap.add_argument("--use-kernels", dest="no_kernels", action="store_false",
                     help="use the cuequivariance triangle kernels (needs "
                          "cuequivariance-torch matching the image's CUDA)")
@@ -505,7 +583,8 @@ def main() -> int:
                       sampling_steps=args.sampling_steps,
                       recycling_steps=args.recycling_steps,
                       use_msa_server=args.use_msa_server,
-                      num_workers=args.num_workers, no_kernels=args.no_kernels,
+                      num_workers=args.num_workers, workers=args.workers,
+                      no_kernels=args.no_kernels,
                       limit=args.limit, resume=args.resume)
     print(json.dumps({k: v for k, v in summary.items() if k != "batches"}, indent=2))
     return 0

@@ -42,6 +42,10 @@ def write_fake_outputs(in_dir: Path, out_dir: Path) -> None:
 
     Token signatures are deterministic per position so the gather and the
     contraction can be checked against a hand calculation downstream.
+    Channel 2 of `s` carries the record's own numeric id, which is what makes
+    the round-robin worker reassembly checkable: if a batch split across
+    workers were stitched back in the wrong order, row k would hold another
+    record's id.
     """
     L, S, Z = eb.N_TOKENS, eb.TOKEN_S, eb.TOKEN_Z
     pred = out_dir / "boltz_results_yaml" / "predictions"
@@ -56,7 +60,9 @@ def write_fake_outputs(in_dir: Path, out_dir: Path) -> None:
         # Channel 0 carries the token index so the gather stays checkable.
         s = np.zeros((L, S), dtype=np.float32)
         s[:, 0] = np.arange(L)
-        s[:, 1:] = 0.05 * np.arange(L)[:, None]
+        s[:, 1] = 0.05 * np.arange(L)
+        s[:, 2] = float(int(rid[1:]))          # this record's own id
+        s[:, 3:] = 0.05 * np.arange(L)[:, None]
         ii, jj = np.meshgrid(np.arange(L), np.arange(L), indexing="ij")
         z = np.repeat(((ii + 2 * jj) / 100.0).astype(np.float32)[:, :, None], Z, axis=2)[None]
         s = s[None]
@@ -92,22 +98,31 @@ def main() -> int:
 
     # the flag must actually reach the command line, not just the signature
     recorded: dict = {}
-    real_run = eb.run_boltz
+    real_run = eb.run_boltz_parallel
+    seen_workers: list[int] = []
 
-    def stub(in_dir, out_dir, cache, **kwargs):
+    def stub(jobs, cache, **kwargs):
         recorded.update(kwargs)
-        write_fake_outputs(Path(in_dir), Path(out_dir))
+        seen_workers.append(len(jobs))
+        for in_dir, out_dir in jobs:
+            write_fake_outputs(Path(in_dir), Path(out_dir))
+
+    call = inspect.signature(eb.extract)
+    assert "workers" in call.parameters, "extract() must expose intra-GPU workers"
+    ok("extract() exposes `workers` (the concurrency cost lever)")
 
     print("\nend-to-end with a stubbed Boltz")
     work = Path(tempfile.mkdtemp(prefix="boltz_test_"))
     try:
-        eb.run_boltz = stub
+        eb.run_boltz_parallel = stub
         rows_wanted = [2, 3, 4, 5, 6, 7, 8, 9]
         summary = eb.extract(CSV, work / "cache", source_rows=rows_wanted,
                              boltz_cache=work / "bc", work_dir=work / "wk",
-                             batch_size=4, resume=False)
+                             batch_size=5, workers=3, resume=False)
         assert recorded.get("no_kernels") is True, recorded
         ok("no_kernels=True is passed through to the boltz invocation")
+        assert max(seen_workers) == 3, seen_workers
+        ok(f"the batch was split across {max(seen_workers)} concurrent workers")
         assert summary["n_rows"] == len(rows_wanted), summary["n_rows"]
         assert summary["n_slots"] == 43
         ok(f"extracted {summary['n_rows']} rows x {summary['n_slots']} slots")
@@ -131,6 +146,12 @@ def main() -> int:
         assert np.allclose(s_arr[0, :, 0], cp.astype(np.float16), atol=0.5)
         ok("boltz_S slots hold exactly the 43 intended tokens")
 
+        # the decisive reassembly check: row k must carry row k's own record id
+        want = np.array([int(eb.record_id(sr)[1:]) for sr in rows_wanted])
+        got = s_arr[:, 0, 2].astype(np.int64)
+        assert np.array_equal(got, want), f"reassembly mismatch: {got} vs {want}"
+        ok("round-robin worker split is reassembled in source_row order")
+
         # the 1/d^2 and uniform contractions must differ, or BZZU is a duplicate
         assert not np.allclose(arrays["boltz_Z.npy"], arrays["boltz_ZU.npy"])
         ok("boltz_Z and boltz_ZU differ, so the weighting ablation is real")
@@ -152,7 +173,7 @@ def main() -> int:
         recorded.clear()
         again = eb.extract(CSV, cache, source_rows=rows_wanted,
                            boltz_cache=work / "bc", work_dir=work / "wk",
-                           batch_size=4, resume=True)
+                           batch_size=5, workers=3, resume=True)
         assert again["processed"] == 0, again["processed"]
         assert not recorded, "resume re-invoked boltz on an already-complete cache"
         ok("resume on a complete cache does no work")
@@ -160,7 +181,7 @@ def main() -> int:
         # a different configuration must be refused, not silently mixed
         try:
             eb.extract(CSV, cache, source_rows=rows_wanted, boltz_cache=work / "bc",
-                       work_dir=work / "wk", batch_size=4, resume=True,
+                       work_dir=work / "wk", batch_size=5, workers=3, resume=True,
                        sampling_steps=200)
         except RuntimeError as exc:
             assert "fingerprint" in str(exc).lower()
@@ -168,7 +189,7 @@ def main() -> int:
         else:
             raise AssertionError("fingerprint mismatch was not caught")
     finally:
-        eb.run_boltz = real_run
+        eb.run_boltz_parallel = real_run
         shutil.rmtree(work, ignore_errors=True)
 
     print(f"\n{len(PASSED)}/{len(PASSED)} checks passed")
