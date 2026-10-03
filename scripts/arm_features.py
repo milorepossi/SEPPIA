@@ -100,22 +100,50 @@ def apply_pooling(block, mode, peptide_slots, pseudoseq_slots, projection=None):
     raise ValueError(f"unknown pooling mode {mode!r}")
 
 
-def fit_projection(block, k):
+def fit_projection(block, k, chunk=65536):
     """Fit one dim->k PCA on every position vector of these rows.
 
     One projection shared across positions rather than 43 separate ones: the
     positions live in the same representation space, so pooling the position
     vectors uses 43x the samples and keeps the arms' features comparable
     position to position, mirroring one-hot's identical 20-d code everywhere.
+
+    Eigendecomposition of the dim x dim covariance, accumulated in float64 over
+    chunks, rather than an SVD of the centred block. The SVD needed a float64
+    copy of all 763k x 1280 position vectors plus its own workspace -- about
+    22 GiB on top of the block -- which the covariance avoids entirely: only
+    chunk x dim is ever upcast, and the matrix itself is 1280 x 1280. Same
+    subspace, ~0.7 GiB instead of ~22.
     """
-    flat = block.reshape(-1, block.shape[-1]).astype(np.float64)
-    if k > flat.shape[1]:
-        raise ValueError(f"pca:{k} exceeds the representation width {flat.shape[1]}")
-    center = flat.mean(axis=0)
-    # Economy SVD of the centred position vectors; rows >> dim here.
-    _, singular, vt = np.linalg.svd(flat-center, full_matrices=False)
-    explained = float((singular[:k]**2).sum()/(singular**2).sum())
-    return (center.astype(np.float32), vt[:k].astype(np.float32)), explained
+    flat = block.reshape(-1, block.shape[-1])
+    n_rows, dim = flat.shape
+    if k > dim:
+        raise ValueError(f"pca:{k} exceeds the representation width {dim}")
+
+    total = np.zeros(dim, dtype=np.float64)
+    for start in range(0, n_rows, chunk):
+        total += flat[start:start+chunk].sum(axis=0, dtype=np.float64)
+    center = total/n_rows
+
+    covariance = np.zeros((dim, dim), dtype=np.float64)
+    for start in range(0, n_rows, chunk):
+        centred = flat[start:start+chunk].astype(np.float64)-center
+        covariance += centred.T@centred
+    covariance /= n_rows
+
+    # eigh returns ascending eigenvalues for a symmetric matrix; take the top k.
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+    eigenvalues = np.clip(eigenvalues[::-1], 0.0, None)  # roundoff can go negative
+    components = eigenvectors[:, ::-1][:, :k].T
+    # Eigenvector signs are arbitrary and LAPACK-dependent. Fixing them keeps
+    # the projection, and so a run, reproducible across machines.
+    flip = np.where(components[np.arange(k), np.abs(components).argmax(axis=1)] < 0, -1.0, 1.0)
+    components = components*flip[:, None]
+
+    spread = eigenvalues.sum()
+    explained = float(eigenvalues[:k].sum()/spread) if spread > 0 else 0.0
+    return (center.astype(np.float32),
+            np.ascontiguousarray(components, dtype=np.float32)), explained
 
 
 # --- Cache access -------------------------------------------------------------
