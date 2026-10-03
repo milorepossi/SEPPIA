@@ -35,7 +35,10 @@ import time
 
 import numpy as np
 import pandas as pd
-import torch
+
+# torch is imported lazily inside load_model/extract_embeddings so that the
+# CPU-only consumers of this module's constants and assertions (features.py,
+# audit_target.py) do not need it installed.
 
 # --- Top-level configuration -------------------------------------------------
 MODEL_NAME = "esm2_t33_650M_UR50D"
@@ -205,6 +208,7 @@ def fingerprint(rows, model_name, layers, linker, pseudoseq_indices):
 def load_model(model_name=MODEL_NAME, device=None):
     """Load an ESM-2 model in eval mode. Returns (model, alphabet, device)."""
     import esm
+    import torch
 
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -319,6 +323,8 @@ def extract_embeddings(dataset_path, out_dir, model_name=MODEL_NAME,
     Takes every path as an argument and nothing from the environment, so a
     Modal entrypoint can mount volumes wherever it likes and call this.
     """
+    import torch
+
     layers = list(layers)
     out_dir = Path(out_dir)
     concat_positions, peptide_slots, pseudoseq_slots = slot_layout(

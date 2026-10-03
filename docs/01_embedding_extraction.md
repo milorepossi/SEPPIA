@@ -249,13 +249,15 @@ A2 vs A3 partly measures input scaling rather than representation quality.
 **10**, which is not a contact position.
 
 - The concat input (full 182-aa `hla_seq`) **does** see the difference.
-- A pseudosequence-only **A0 BLOSUM62 baseline would collapse them**, making two
-  distinct alleles indistinguishable.
-- Note the cached *pseudoseq slots* are identical for these two at layer 0 by
-  construction; at layers 15/33 they differ, because attention has seen position 10.
+- The **A0 one-hot baseline collapses them**, because it encodes only the 34
+  pseudosequence positions — two distinct alleles become indistinguishable.
+- Note the cached *pseudoseq slots* are identical for these two at layer 0 too,
+  by construction; at layers 15/33 they differ, because attention has seen
+  position 10.
 
-Decide A0's HLA encoding explicitly (full 182 aa vs 34-mer) and record it — it is
-a confound, not a detail.
+So A0 and A1 share this limitation, while A2/A3 do not. 756 of 28,166 rows
+(2.7%) are affected — record it as a known ceiling on A0/A1 rather than reading
+any A1→A2 gain as purely "context helps".
 
 ---
 

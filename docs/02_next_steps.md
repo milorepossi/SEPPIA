@@ -6,7 +6,7 @@ of MLP heads with identical architecture and hyperparameter budget, differing
 
 | Arm | Input features | Needs |
 |---|---|---|
-| A0 | BLOSUM62 encoding (no PLM) | — |
+| A0 | one-hot encoding (no PLM) | `concat_onehot.npy` — **built**, `scripts/features.py` |
 | A1 | ESM-2 layer 0 (context-free control) | `concat_L0.npy` |
 | A2 | ESM-2 layer 15 (mid-stack) | `concat_L15.npy` |
 | A3 | ESM-2 layer 33 (final) | `concat_L33.npy` |
@@ -93,9 +93,24 @@ Alternatives if time allows (apply to every PLM arm or none): per-slot learned
 attention pooling; or flatten only the 9 peptide slots (9×1280 = 11,520) and
 mean-pool the HLA side.
 
-Input dimension necessarily differs between arms (A0 ≈ 860, PLM arms 2560). That
-is the intended difference. Keep **hidden widths, depth, dropout, optimiser, LR
-schedule, epochs, early-stopping rule and seed count identical.**
+**A0 must not be mean-pooled.** Averaging one-hot over the 9 peptide slots yields
+amino-acid *composition* and destroys position — fatal for a 9-mer, where the P2
+and P9 anchor positions carry most of the binding signal. A0 is therefore
+flattened: 43 × 20 = **860 features**.
+
+That creates an asymmetry to resolve deliberately: flattened A0 keeps positional
+information that mean-pooled PLM arms throw away, so A0 could win for the wrong
+reason. Two consistent options — pick one and apply it to every arm:
+
+| Option | A0 | PLM arms | Note |
+|---|---|---|---|
+| **Flatten everything** | 860 | 55,040 | honest, but the PLM first layer dominates; needs strong regularisation |
+| **Flatten, then project to a common d** | 860 → 512 | 55,040 → 512 | PCA or fixed random projection, **fit on train only**; makes "identical architecture" literally true |
+
+The second is recommended: equal input dimension across arms means the head is
+byte-identical and only the feature *content* differs, which is exactly the
+stated design. Keep **hidden widths, depth, dropout, optimiser, LR schedule,
+epochs, early-stopping rule and seed count identical** either way.
 
 ### 0.3 Feature standardisation — required, because of the layer-norm asymmetry
 
@@ -104,15 +119,53 @@ Layer 33 is post-`emb_layer_norm_after`, layer 15 is raw (mean abs 0.145 vs
 `StandardScaler` **per arm on the training split only** and reuse it for test.
 Without this, A2 vs A3 partly measures input scaling.
 
-### 0.4 A0's HLA encoding
+### 0.4 A0 encoding — one-hot (done)
 
-`HLA-B*14:01(C67S)` and `HLA-B*14:02(C67S)` (756 rows) share a pseudosequence and
-differ only at `hla_seq` index 10, a non-contact position. A pseudosequence-only
-BLOSUM baseline makes them identical; the PLM arms see the difference.
+Implemented in `scripts/features.py` → `embeddings/concat_onehot.npy`,
+`(28166, 43, 20)` float32, 92 MiB. It imports the slot layout, pseudosequence
+indices and row order from `extract_embeddings` rather than restating them, so A0
+and the ESM-2 arms describe the same positions of the same rows in the same
+order by construction.
 
-To keep A0 a fair baseline, encode the **same 43 positions** the PLM arms use
-(9 peptide + 34 pseudoseq) × 20 BLOSUM62 columns = **860 features**, and note the
-collapse as a known limitation.
+```bash
+python scripts/features.py rasmussen_et_al_dataset.xlsx --out-dir embeddings
+```
+
+Three assertions, all passing on the full dataset:
+
+| Check | Result |
+|---|---|
+| Pseudosequence indices reconstruct `hla_pseudoseq` | 75/75 alleles |
+| Round-trip: slots 0–8 decode to the peptide, 9–42 to `hla_pseudoseq` | all 28,166 rows |
+| Cross-check vs `concat_L0.npy`: residues map 1:1 onto layer-0 vectors | 20 residues, rank 20/20 |
+
+The third runs only when an ESM-2 cache is present in the same directory, and it
+ties the two arms' slot layouts together — if either were shifted by one, it
+fails. It also re-derives the rank result below.
+
+**Why one-hot and not BLOSUM62.** ESM-2 layer 0 is `embed_scale * embed_tokens`,
+a pure per-residue lookup. On this dataset's 20-letter alphabet its embedding
+matrix is **rank 20, condition number 2.3**, i.e. an invertible linear map of
+one-hot. So an MLP on one-hot can represent exactly what an MLP on layer-0
+features can — the first weight layer absorbs the embedding matrix.
+
+A0 vs A1 is therefore an **information-theoretic null by construction**: any gap
+is optimisation and conditioning, not knowledge. That makes A1 a genuine control.
+A BLOSUM62 encoding would instead inject a biochemical substitution prior that
+layer 0 does not have, so A0 could beat A1 legitimately and "A0 ≈ A3" would be
+unreadable — biochemical prior, or context not helping?
+
+Known limitation, shared with A1: A0 sees only the 34 pseudosequence positions,
+so `HLA-B*14:01(C67S)` and `HLA-B*14:02(C67S)` (756 rows, 2.7%) are
+indistinguishable — they differ only at `hla_seq` index 10, a non-contact
+position. A2/A3 do see the difference, so do not read the whole A1→A2 gain as
+"context helps". Trade-off accepted: encoding all 182 HLA positions would make
+A0's 3,640 features incomparable to the PLM arms' kept slots.
+
+The cost of this choice is that one-hot is not the field-standard baseline —
+NetMHCpan and most pMHC predictors use BLOSUM encoding — so "we beat one-hot" is
+a weaker claim externally than "we beat BLOSUM62". Adding a BLOSUM62 arm later is
+~10 lines in `features.py` at the same 860 dimensions and needs no other change.
 
 ---
 
@@ -159,14 +212,21 @@ moment thresholds were not met — loosen them rather than reinterpreting the
 output. Commit `metadata_*.json`; the `.xlsx` splits are derived and large, so
 consider gitignoring them and regenerating from the recorded seed.
 
-## 3. Feature assembly — `scripts/features.py`
+## 3. Split join — `scripts/splits.py`
 
-The only place that joins splits to the cache.
+`scripts/features.py` already builds A0 and owns the slot layout; this is the
+separate, still-missing piece: the one place that maps a split's rows onto cache
+positions. Keep it out of `features.py` so nothing in the feature path is ever
+aware of splits.
 
 ```
-index.json["source_row"]  -->  position in concat_L*.npy
+index.json["source_row"]  -->  position in concat_*.npy   (identity today: row i == source_row i)
 training_{i}.xlsx.source_row  -->  np.searchsorted / dict lookup  -->  row indices
 ```
+
+Applies uniformly to `concat_onehot.npy` and `concat_L{0,15,33}.npy`, which share
+one `index.json` — `features.py` verifies that agreement, or writes the index if
+extraction has not run yet.
 
 - `np.load(..., mmap_mode="r")`, fancy-index the split's rows, then pool. Pooled
   train+test for one layer is ~0.1 GB, so cache pooled arrays to `.npy` and
@@ -198,10 +258,13 @@ only.
 ## 5. Analysis
 
 - Primary: mean ± sd Spearman per arm across the 5 splits.
-- The informative contrasts are **A1 vs A3** (does context help beyond amino-acid
-  identity?) and **A0 vs A1** (does a context-free PLM embedding beat BLOSUM62 at
-  all?). A1 is the control that makes the claim falsifiable — if A3 ≈ A1, depth
+- The informative contrast is **A1 vs A3** — does context help beyond amino-acid
+  identity? A1 is the control that makes the claim falsifiable: if A3 ≈ A1, depth
   buys nothing here.
+- **A0 vs A1 is a pipeline check, not a result.** The two are information-matched
+  (§0.4), so they should land within noise. A large gap means a bug, a scaling
+  problem, or an unlucky optimiser setting — investigate it before reading
+  anything else.
 - Paired comparison across splits (same splits for every arm) ⇒ use a paired test
   or report per-split deltas, not independent-sample statistics.
 - Break out unseen-HLA and unseen-peptide strata separately.
@@ -229,11 +292,13 @@ construction — report it as a separate claim.
 
 ## 7. Suggested order
 
-1. §0 decisions written down (target transform, pooling, scaling, A0 encoding).
-2. §2 splits — unblocks everything and is CPU-only.
-3. §3 feature assembly + the join assertions, validated against the existing
-   local 500-row cache.
-4. §4 head trained on the 500-row cache end-to-end to shake out plumbing.
-5. §1 Modal full extraction (9.3 GB).
-6. §4/§5 all arms × 5 splits × seeds, then analysis.
-7. §6 A4 last.
+1. ~~§0.4 A0 encoding~~ — **done**, one-hot, `scripts/features.py`.
+2. Remaining §0 decisions written down (target transform, pooling, scaling).
+3. §2 splits — unblocks everything and is CPU-only.
+4. §3 split-join assertions, validated against the existing local 500-row cache
+   and the full A0 array.
+5. §4 head trained on A0 end-to-end to shake out plumbing — A0 needs no GPU and
+   is already built, so this can start immediately.
+6. §1 Modal full extraction (9.3 GB).
+7. §4/§5 all arms × 5 splits × seeds, then analysis.
+8. §6 A4 last.
