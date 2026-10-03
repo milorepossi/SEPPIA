@@ -67,6 +67,9 @@ def write_fake_outputs(in_dir: Path, out_dir: Path) -> None:
         z = np.repeat(((ii + 2 * jj) / 100.0).astype(np.float32)[:, :, None], Z, axis=2)[None]
         s = s[None]
         np.savez_compressed(here / f"embeddings_{rid}.npz", s=s, z=z)
+        # the confidence module writes this on every run; per-token pLDDT
+        plddt = (np.arange(L, dtype=np.float32) / L)[None]
+        np.savez_compressed(here / f"plddt_{rid}_model_0.npz", plddt=plddt)
 
         # 182 CA atoms on chain A, 9 on chain B, in residue order
         lines = []
@@ -136,10 +139,21 @@ def main() -> int:
         cp = np.asarray(eb.slot_layout(linker="")[0])
         arrays = {name: np.load(cache / name) for name in eb.ARRAYS}
         for name, arr in arrays.items():
-            assert arr.shape == (len(rows_wanted), 43, eb.ARRAYS[name]), (name, arr.shape)
+            slots, dim = eb.ARRAYS[name]
+            assert arr.shape == (len(rows_wanted), slots, dim), (name, arr.shape)
             assert arr.dtype == np.float16
             assert np.isfinite(arr).all(), f"{name} holds non-finite values"
-        ok("all three caches have the right shape, dtype and no NaNs")
+        ok(f"all {len(arrays)} caches have the right shape, dtype and no NaNs")
+
+        # pLDDT must land at the 43 slot tokens, same gather as s
+        plddt = arrays["boltz_PLDDT.npy"][0, :, 0].astype(np.float32)
+        assert np.allclose(plddt, (cp / eb.N_TOKENS).astype(np.float16), atol=1e-3)
+        ok("boltz_PLDDT gathers pLDDT at the same 43 tokens as boltz_S")
+
+        # the raw interface block must be the 9x34 pair block, recoverable
+        zraw = arrays["boltz_ZRAW.npy"][0].astype(np.float32)
+        assert zraw.shape == (eb.N_PEP * eb.N_CONTACT, eb.TOKEN_Z)
+        ok("boltz_ZRAW holds the raw 9x34 interface block for offline derivation")
 
         # s[token, :] == token, so slot k must hold concat_positions[k]
         s_arr = arrays["boltz_S.npy"]

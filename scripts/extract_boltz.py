@@ -112,7 +112,24 @@ TOKEN_S = 384
 TOKEN_Z = 128
 N_TOKENS = HLA_LEN + PEPTIDE_LEN          # 191
 D_MIN = 3.0                                # floor on CA-CA distance, angstrom
-ARRAYS = {"boltz_S.npy": TOKEN_S, "boltz_Z.npy": TOKEN_Z, "boltz_ZU.npy": TOKEN_Z}
+N_PEP, N_CONTACT = PEPTIDE_LEN, 34          # the 9 x 34 interface block
+# name -> (slots, dim). The first four share the 43-slot layout and are
+# registered ladder arms; boltz_ZRAW is not an arm but a derivation source.
+ARRAYS = {
+    "boltz_S.npy": (43, TOKEN_S),
+    "boltz_Z.npy": (43, TOKEN_Z),
+    "boltz_ZU.npy": (43, TOKEN_Z),
+    # Per-token pLDDT at the 43 slots. The confidence module already writes
+    # this on every run, so capturing it costs no GPU time at all, and it gives
+    # a zero-training arm: does the model's own confidence in where the peptide
+    # sits predict how long it stays there?
+    "boltz_PLDDT.npy": (43, 1),
+    # The raw 9 x 34 interface block of z, flattened to 306 pair slots. Not an
+    # arm. It exists so that any further z-derived feature -- a different
+    # distance weighting, or a nonlinear distogram readout -- can be computed
+    # offline on CPU instead of paying for a second extraction. 78 KB/complex.
+    "boltz_ZRAW.npy": (N_PEP * N_CONTACT, TOKEN_Z),
+}
 CHECKPOINT_EVERY = 200
 
 
@@ -232,7 +249,26 @@ def reduce_z(z: np.ndarray, weights: np.ndarray) -> np.ndarray:
     return np.concatenate([pep_side, hla_side], axis=0)
 
 
-def reduce_one(emb_path: Path, structure_path: Path,
+def read_plddt(plddt_path: Path, concat_positions: np.ndarray) -> np.ndarray:
+    """Per-token pLDDT at the 43 slots, shape (43, 1)."""
+    with np.load(plddt_path) as handle:
+        values = np.squeeze(np.asarray(handle["plddt"], dtype=np.float32))
+    if values.shape != (N_TOKENS,):
+        raise ValueError(f"{plddt_path} holds pLDDT of shape {values.shape}, "
+                         f"expected ({N_TOKENS},); is token_level_confidence on?")
+    return values[concat_positions][:, None]
+
+
+def interface_block(z: np.ndarray) -> np.ndarray:
+    """The raw (9*34, 128) peptide-by-contact block of z, both directions mean."""
+    pep_idx = np.arange(HLA_LEN, N_TOKENS)
+    hla_idx = np.asarray(PSEUDOSEQ_INDICES)
+    block = 0.5 * (z[np.ix_(pep_idx, hla_idx)]
+                   + z[np.ix_(hla_idx, pep_idx)].transpose(1, 0, 2))
+    return block.reshape(N_PEP * N_CONTACT, TOKEN_Z)
+
+
+def reduce_one(emb_path: Path, structure_path: Path, plddt_path: Path,
                concat_positions: np.ndarray) -> dict[str, np.ndarray]:
     with np.load(emb_path) as handle:
         s = np.asarray(handle["s"], dtype=np.float32)
@@ -245,6 +281,8 @@ def reduce_one(emb_path: Path, structure_path: Path,
         "boltz_S.npy": reduce_s(s, concat_positions),
         "boltz_Z.npy": reduce_z(z, w),
         "boltz_ZU.npy": reduce_z(z, np.ones_like(w)),
+        "boltz_PLDDT.npy": read_plddt(plddt_path, concat_positions),
+        "boltz_ZRAW.npy": interface_block(z),
     }
 
 
@@ -262,13 +300,13 @@ def fingerprint(rows, n_slots: int, extra: str) -> str:
 def open_outputs(out_dir: Path, n_rows: int, n_slots: int, resume: bool):
     out_dir.mkdir(parents=True, exist_ok=True)
     arrays = {}
-    for name, dim in ARRAYS.items():
+    for name, (slots, dim) in ARRAYS.items():
         path = out_dir / name
         if resume and path.exists():
             arrays[name] = np.lib.format.open_memmap(path, mode="r+")
         else:
             arrays[name] = np.lib.format.open_memmap(
-                path, mode="w+", dtype=np.float16, shape=(n_rows, n_slots, dim))
+                path, mode="w+", dtype=np.float16, shape=(n_rows, slots, dim))
     return arrays
 
 
@@ -282,7 +320,7 @@ def write_index(out_dir: Path, rows, peptide_slots, pseudoseq_slots, fp: str) ->
         "pseudoseq_indices": list(map(int, PSEUDOSEQ_INDICES)),
         "n_slots": len(peptide_slots) + len(pseudoseq_slots),
         "model": "boltz2",
-        "arrays": {k: v for k, v in ARRAYS.items()},
+        "arrays": {k: list(v) for k, v in ARRAYS.items()},
         "fingerprint": fp,
     }
     tmp = out_dir / "index.json.tmp"
@@ -309,7 +347,7 @@ def write_progress(out_dir: Path, rows_done: int, fp: str) -> None:
 
 
 def check_free_space(out_dir: Path, n_rows: int, n_slots: int) -> dict:
-    need = sum(n_rows * n_slots * dim * 2 for dim in ARRAYS.values())
+    need = sum(n_rows * slots * dim * 2 for slots, dim in ARRAYS.values())
     free = shutil.disk_usage(out_dir).free
     if free < need * 1.15:
         raise RuntimeError(f"need ~{need/1024**3:.2f} GiB for the cache but only "
@@ -402,14 +440,16 @@ def run_boltz(in_dir: Path, out_dir: Path, cache: Path, *, sampling_steps: int,
                            f"stderr tail:\n{proc.stderr[-4000:]}")
 
 
-def locate_outputs(boltz_out: Path, rid: str) -> tuple[Path, Path]:
-    """Find this record's embeddings npz and model-0 structure."""
+def locate_outputs(boltz_out: Path, rid: str) -> tuple[Path, Path, Path]:
+    """Find this record's embeddings npz, model-0 structure and pLDDT npz."""
     emb = next(boltz_out.rglob(f"embeddings_{rid}.npz"), None)
     pdb = next(boltz_out.rglob(f"{rid}_model_0.pdb"), None)
-    if emb is None or pdb is None:
+    plddt = next(boltz_out.rglob(f"plddt_{rid}_model_0.npz"), None)
+    if emb is None or pdb is None or plddt is None:
         raise FileNotFoundError(
-            f"missing outputs for {rid}: embeddings={emb}, structure={pdb}")
-    return emb, pdb
+            f"missing outputs for {rid}: embeddings={emb}, structure={pdb}, "
+            f"plddt={plddt}")
+    return emb, pdb, plddt
 
 
 def extract(dataset_path, out_dir, *, source_rows=None, msa_dir=None,
@@ -505,8 +545,8 @@ def extract(dataset_path, out_dir, *, source_rows=None, msa_dir=None,
             raise RuntimeError("worker id reassembly left a gap")
 
         for offset, rid in enumerate(ids):
-            emb, pdb = locate_outputs(boltz_out, rid)
-            reduced = reduce_one(emb, pdb, concat_positions)
+            emb, pdb, plddt = locate_outputs(boltz_out, rid)
+            reduced = reduce_one(emb, pdb, plddt, concat_positions)
             for name, block in reduced.items():
                 peak = float(np.abs(block).max())
                 if peak > f16_max:

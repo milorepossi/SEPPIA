@@ -169,3 +169,155 @@ shows a 14.1M-parameter head losing to an 860-feature one-hot encoding.
    same representation is unlikely to rescue it, and the negative result is
    itself a submission.
 4. Only then fine-tune the last 4 blocks, 10 epochs, $19.
+
+---
+
+## 5. Is `pca:20` a good choice? No, and your own results show why
+
+`pca:20` was introduced to make the ladder fair: every arm gets 43 x 20 = 860
+features, so the head is byte-identical and only the feature content differs.
+The intent is right. The instrument is not.
+
+### The ladder's ordering tracks the compression, not the representation
+
+| Arm | variance kept at `pca:20` | Spearman |
+|---|---:|---:|
+| A1 ESM-2 layer 0 | 1.000 | 0.761 |
+| A2 ESM-2 layer 15 | 0.794 | 0.750 |
+| A3 ESM-2 layer 33 | 0.725 | 0.736 |
+
+Spearman and variance retained correlate at **r = 0.94** across the three arms,
+and the ordering is identical. Then the uncompressed check:
+
+| A3 layer 33 | Spearman |
+|---|---:|
+| `pca:20` | 0.736 |
+| `flatten` | 0.767 |
+| A0 one-hot, for reference | 0.771 |
+
+Removing the compression recovers **+0.031**, and A3's apparent 0.035 deficit
+against one-hot collapses to **0.004**. So the headline finding that deeper
+ESM-2 layers are progressively worse may be substantially an artifact of how
+hard each one was compressed. `RESULTS.md` concedes this in passing ("partly a
+budget artifact"); the correlation above says it is more than partly.
+
+### Three reasons PCA is the wrong instrument here
+
+**It ranks by variance, not by relevance.** The leading directions of an
+embedding's covariance are not the directions carrying binding information.
+PCA is unsupervised, so it will happily spend all 20 components on whatever
+dominates the variance — sequence composition, position, chain identity — and
+discard a low-variance direction that happens to be the informative one.
+
+**It is lossless for exactly one arm.** ESM-2 layer 0 has rank exactly 20 on
+the 20-letter alphabet, so `pca:20` is lossless there and A0-vs-A1 is a clean
+null. For every other arm it is lossy by an arm-dependent amount, which means
+the rungs are not on the footing the design assumed.
+
+**Dimension-matching is not information-matching.** Equal feature counts
+equalise first-layer parameters, nothing more. Compressing 1280 dimensions to
+20 and 128 dimensions to 20 are not comparable operations.
+
+For the Boltz arms the fraction of directions kept would be:
+
+| Arm | D | directions kept at K=20 |
+|---|---:|---:|
+| one-hot / L0 | 20 | 100% (lossless, rank 20) |
+| ESM-2 L15 / L33 | 1280 | 1.6% |
+| `BZS` | 384 | 5.2% |
+| `BZZ` | 128 | 15.6% |
+
+`BZZ` would be compressed far less harshly than the ESM-2 arms were, which
+means `pca:20` would quietly *favour* it. A win under that setting would be as
+suspect as A3's loss was.
+
+### What to run instead
+
+Report all three, and treat disagreement between them as the finding.
+
+| Setting | What it answers | Parameter-matched? |
+|---|---|---|
+| `flatten` + strong weight decay | is the information there at all? | no, report separately |
+| **fixed-variance PCA** (K per arm for 95%) | information-matched comparison | no, but report K |
+| **random projection** to K=20 | unbiased dimension-match | yes |
+
+Random projection is the better parameter-matched control: it equalises the
+head exactly as PCA does, but it has no preference for high-variance
+directions, so it cannot systematically discard the informative ones. The
+Johnson-Lindenstrauss bound gives distance preservation in expectation.
+
+Non-negotiable either way: **print the variance retained next to every score.**
+That single column would have flagged the ESM-2 confound immediately.
+
+## 6. How this regressor compares to PreFold-dG's
+
+| | PreFold-dG | this arm |
+|---|---|---|
+| Tensors used | `s_inputs`, `s`, `z`, distogram | `s`, `z` (+ pLDDT) |
+| Interchain weighting | 1/d², zero on intrachain | same, from Cα coordinates |
+| Spatial pooling | outer product -> fixed [384x384] | per-position, 43 slots kept |
+| Feature width | 147,456, then projected | 860 to 16,512 |
+| Combining tensors | project each, then **average** | separate arms (not yet combined) |
+| Head | 2-layer MLP | `F -> 256 -> 128 -> 1` |
+| Loss | joint MSE over ΔG_wt, ΔG_mut, ΔΔG | single MSE on ln(t½+0.1) |
+| Training data | SKEMPI 2.0, 5,817 rows / 334 complexes | 28,166 rows / 75 alleles |
+
+The heads are near-identical. The real differences are three, and two of them
+are gaps on our side.
+
+**Pooling (ours is better here).** Their outer-product pooling exists to give
+variable-length complexes a fixed size. Ours are always 182+9, so we keep
+per-position structure and preserve the P2/P9 anchor signal their pooling would
+average away.
+
+**`s_inputs` is missing (gap).** Their ablation found that excluding
+`s_inputs` "has the most deleterious effect" on **ΔG** specifically — absolute
+affinity, which is the closer analogue of our absolute half-life — while `s`
+mattered most for ΔΔG. We use only `s`. Adding `s_inputs` is nearly free: it is
+the input embedder's output, available in the same forward pass.
+
+**Tensors are never combined (gap).** They project each embedding and average
+the three. We score `BZS` and `BZZ` as separate arms and have never run the
+concatenation, which is the configuration closest to theirs and the one most
+likely to work. It should be a registered arm.
+
+Their multi-task loss also has a direct analogue we are not using: training on
+half-life jointly with binding-affinity data, which is the TLStab transfer
+result (PMID 38577265) from a different angle.
+
+## 7. Why the distogram is not included — and the part that should be
+
+The distogram is **not** an information-bearing addition, and this is provable
+rather than a judgement call.
+
+`DistogramModule` is a single `nn.Linear(128, 64)` applied to `z`. Our `BZZ`
+contraction is a weighted sum over interface pairs. Both are linear, so they
+commute: contracting then projecting equals projecting then contracting.
+Verified numerically to 1.07e-14, and by least squares, the contracted
+distogram logits are recoverable from contracted `z` at **R² = 1.000000**.
+
+Given `BZZ`, the distogram logits add exactly nothing — the MLP's first linear
+layer can reproduce them. PreFold-dG gains from including it because their
+pooling collapses `z` to 128 numbers total and the distogram survives as a
+differently-pooled view; ours keeps `z` per-position, so it is strictly
+redundant.
+
+**The part worth adding is the nonlinear readout.** Softmax over the 64 bins is
+not linear, so statistics derived from the *distribution* are not recoverable:
+
+| Derived statistic | best affine fit from contracted `z` |
+|---|---:|
+| distogram logits (control) | R² = 1.0000 |
+| expected distance | R² = 0.2046 |
+| **bin entropy (geometric uncertainty)** | **R² = 0.0252** |
+
+Bin entropy is 97.5% unexplained by any affine function of `z`. And it is the
+mechanistically interesting one for this task: entropy over the predicted
+distance distribution is the model's uncertainty about where a residue sits,
+which is a proxy for a floppy interface — and half-life is an off-rate, which
+is dynamics. (Measured on random `z`; the analytic argument holds regardless,
+the magnitudes on real `z` are not yet known.)
+
+This needs no GPU re-run. `boltz_ZRAW.npy` now caches the raw 9x34 interface
+block, so the distogram head's weights can be applied offline on CPU and any
+nonlinear statistic derived from it afterwards.

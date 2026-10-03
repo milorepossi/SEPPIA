@@ -48,6 +48,17 @@ use, which is what keeps the ladder comparable.
 | `BZS` | `boltz_S.npy` | `(n, 43, 384)` | `s` gathered at the 43 slots |
 | `BZZ` | `boltz_Z.npy` | `(n, 43, 128)` | `z` contracted over the interface, 1/d² weighted |
 | `BZZU` | `boltz_ZU.npy` | `(n, 43, 128)` | same contraction, uniform weights |
+| `BZP` | `boltz_PLDDT.npy` | `(n, 43, 1)` | per-token pLDDT — **zero-training arm** |
+| — | `boltz_ZRAW.npy` | `(n, 306, 128)` | raw 9×34 interface block, for offline derivation |
+
+`BZP` costs nothing: the confidence module writes per-token pLDDT on every run
+regardless, so this is 43 numbers already being computed and discarded. It asks
+whether the model's own confidence in *where* the peptide sits predicts *how
+long* it stays there — a single scalar per slot, no training, no parameters.
+
+`boltz_ZRAW` is not an arm. It caches the raw interface block so any further
+z-derived feature can be computed offline on CPU rather than paying for a second
+extraction. 3.5 GB for the full dataset, all five arrays together.
 
 `BZZ` is the arm that carries the hypothesis. Boltz-2's single representation is
 384-dimensional against ESM-2 650M's 1280, so it is **not** the richer
@@ -86,12 +97,21 @@ the feature path is aware of splits.
 |---|---|---:|---:|---:|
 | `flatten` | 43·D | 16,512 | 5,504 | 860 |
 | `mean` | 2·D, peptide and HLA blocks separately | 768 | 256 | 40 |
-| **`pca:20`** | 43·20, one D→20 projection fitted on train rows | **860** | **860** | **860** |
+| `pca:20` | 43·20, one D→20 projection fitted on train rows | 860 | 860 | 860 |
 
-`pca:20` is the headline setting because it makes every arm **860 features**,
-identical to one-hot. The head is then byte-identical across arms and only the
-feature *content* differs, which is the whole point of a ladder. `flatten` is
-reported separately as a *capacity* experiment, not a representation one.
+`pca:20` equalises the feature count so the head is byte-identical across arms.
+**Treat it with suspicion.** In the ESM-2 ladder, Spearman tracks the variance
+each arm retained at `pca:20` with r = 0.94 (L0 100% → 0.761, L15 79.4% →
+0.750, L33 72.5% → 0.736), and running A3 uncompressed recovers +0.031, which
+shrinks its deficit against one-hot from 0.035 to 0.004. The ladder's ordering
+may be measuring the compression rather than the representation.
+
+PCA also ranks directions by variance, not relevance, and `pca:20` would keep
+15.6% of `BZZ`'s directions against 1.6% of ESM-2's — so it would quietly
+*favour* the Boltz arms. Report `flatten`, fixed-*variance* PCA, and a random
+projection, print the variance retained beside every score, and treat
+disagreement between them as the result. Full analysis in
+[`docs/05_finetune.md`](docs/05_finetune.md) §5.
 
 ### Stage 4 — the regressor
 

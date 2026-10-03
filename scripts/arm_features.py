@@ -63,7 +63,9 @@ CACHED_ARMS = {"L0": "concat_L0.npy", "L15": "concat_L15.npy", "L33": "concat_L3
 # BZZ is the one that tests the actual hypothesis: ESM-2 has no representation
 # of residue pairs, so the pair tensor is the only thing Boltz adds that a
 # sequence model cannot express.
-BOLTZ_ARMS = {"BZS": "boltz_S.npy", "BZZ": "boltz_Z.npy", "BZZU": "boltz_ZU.npy"}
+#   BZP   per-token pLDDT at the 43 slots    (n, 43, 1)    -- zero-training arm
+BOLTZ_ARMS = {"BZS": "boltz_S.npy", "BZZ": "boltz_Z.npy", "BZZU": "boltz_ZU.npy",
+              "BZP": "boltz_PLDDT.npy"}
 CACHED_ARMS |= BOLTZ_ARMS
 
 ONEHOT_ARM = "onehot"
