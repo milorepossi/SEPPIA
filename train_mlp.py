@@ -277,7 +277,9 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
 
 def error_bars(values):
     """Whisker heights for a per-split mean; None when one split leaves them undefined."""
-    return values.std(axis=0, ddof=1) if len(values) > 1 else None
+    if len(values) < 2:
+        return None
+    return np.nanstd(values, axis=0, ddof=1)
 
 
 def style_axes(ax):
@@ -384,8 +386,12 @@ def test_error_figure(results, path):
 
     names = [('pearson', 'Pearson r'), ('spearman', 'Spearman rho')]
     positions = np.arange(len(names))
-    values = np.array([[result['test'][key] for key, _ in names] for result in results])
-    means, deviations = values.mean(axis=0), error_bars(values)
+    # A correlation is None where a model predicted a constant; skip those
+    # splits rather than letting them poison the bar.
+    values = np.column_stack([as_float([result['test'][key] for result in results])
+                              for key, _ in names])
+    means = np.nanmean(values, axis=0) if not np.isnan(values).all() else np.zeros(len(names))
+    deviations = error_bars(values)
     right.bar(positions, means, width=0.4, color=COLORS['gradient'], zorder=2)
     right.errorbar(positions, means, yerr=deviations, fmt='none', ecolor=COLORS['ink'],
                    elinewidth=1.2, capsize=4, zorder=3)
@@ -407,17 +413,26 @@ def test_error_figure(results, path):
     fig.savefig(path, dpi=180, facecolor=COLORS['surface'])
 
 
+def as_float(values):
+    """Values with None, which an undefined correlation yields, as nan."""
+    return np.array([np.nan if v is None else v for v in values], dtype=float)
+
+
 def mean_sd(values):
-    """Mean and sample standard deviation over splits.
+    """Mean and sample standard deviation over splits, tolerating gaps.
 
     The sample deviation needs two splits, so a single-split run reports None
     rather than the nan that ddof=1 returns there, which metrics.json cannot
-    hold: it is written with allow_nan=False.
+    hold: it is written with allow_nan=False. A correlation is also None when
+    a model's predictions are constant, which a model too small to separate
+    the rows genuinely produces, so those splits are skipped rather than
+    poisoning the mean.
     """
-    array = np.array(values)
-    return dict(mean=float(array.mean()),
-                sd=float(array.std(ddof=1)) if array.size > 1 else None,
-                values=array.tolist())
+    array = as_float(values)
+    present = array[~np.isnan(array)]
+    return dict(mean=float(present.mean()) if present.size else None,
+                sd=float(present.std(ddof=1)) if present.size > 1 else None,
+                values=[None if np.isnan(v) else float(v) for v in array])
 
 
 def summary_table(results):
@@ -466,12 +481,16 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
                             # reloaded PLM model cannot rebuild its own inputs.
                             **fitted_state),
                        out/f'mlp_split_{index}.pt')
-        print(f"[{arm}] split {index}: {result['features']} features"
-              + (f" from {result['cache_model']} d={result['cache_dim']}"
-                 if result['cache_model'] else '') + '  '
+        # correlations() returns None when either side is constant, which a
+        # model too small to separate the rows genuinely produces.
+        spearman = result['test']['spearman']
+        spearman = 'n/a (constant)' if spearman is None else f'{spearman:.3f}'
+        source = (f" from {result['cache_model']} d={result['cache_dim']}"
+                  if result['cache_model'] else '')
+        print(f"[{arm}] split {index}: {result['features']} features{source}  "
               f"best epoch {result['best_epoch']}/{result['epochs_run']}  "
               f"test RMSE {result['test']['rmse']:.3f}  "
-              f"Spearman {result['test']['spearman']:.3f}  "
+              f"Spearman {spearman}  "
               f"({result['train_seconds']:.1f}s)", flush=True)
         results.append(result)
     convergence_figure(results, out/'convergence.png')

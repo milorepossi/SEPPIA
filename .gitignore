@@ -23,3 +23,7 @@ DATA/split/*.png
 
 # Slurm job logs
 slurm/logs/
+
+# Sweep runs: 33 directories of checkpoints and per-run metrics, regenerate
+# with slurm/sweep_width.sbatch
+RESULTS/sweep/
