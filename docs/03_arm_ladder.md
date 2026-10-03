@@ -121,9 +121,15 @@ layer's width, so it — not the network — is the live experimental choice.
 
 | `--pooling` | A0 features | PLM features | First layer vs A0 | Peak RAM / split |
 |---|---|---|---|---|
-| `flatten` | 860 | 55,040 | **64×** the parameters | ~15.6 GiB |
-| `mean` | 40 | 2,560 | 3×, discards position within each block | ~0.7 GiB |
-| `pca:20` | 860 | **860** | **identical** | ~0.2 GiB |
+| `flatten` | 860 | 55,040 | **64×** the parameters | ~15 GiB (measured 14.5) |
+| `mean` | 40 | 2,560 | 3×, discards position within each block | ~5 GiB |
+| `pca:20` | 860 | **860** | **identical** | ~5 GiB |
+
+Peak memory is dominated by materialising the training rows as float32
+(`19,716 × 43 × 1280 × 4` = 4.3 GiB), not by the pooled width, so the three
+pooling modes differ far less than their feature counts suggest. Only
+`flatten` is substantially worse, because it also keeps standardised copies of
+the full-width matrices.
 
 `flatten` is the most literal reading of "only the input features differ", but
 a 55,040 → 256 first layer is 14.1M parameters against A0's 220k, trained on
@@ -262,29 +268,70 @@ Once it lands, run the ladder as described in §9.
 
 ---
 
-## 9. Running the ladder — one layer per process
+## 9. Running the ladder — Slurm job array
 
-**Shard by layer, not by split.** Each `--arm` run already does all five
-splits, so one process per layer is the right granularity and needs no extra
-flags.
+`slurm/ladder.sbatch` is a seven-task array, one task per (arm, pooling) pair,
+each training all five splits:
 
 ```bash
-# A0 needs no GPU and no embedding cache
-python train_mlp.py --output-dir RESULTS/A0_onehot
-
-# one process per layer, concurrently
-python train_mlp.py --arm L0  --pooling pca:20 --device cuda:0 --output-dir RESULTS/A1_L0
-python train_mlp.py --arm L15 --pooling pca:20 --device cuda:1 --output-dir RESULTS/A2_L15
-python train_mlp.py --arm L33 --pooling pca:20 --device cuda:2 --output-dir RESULTS/A3_L33
-
-python scripts/compare_arms.py RESULTS/A0_onehot RESULTS/A1_L0 \
-    RESULTS/A2_L15 RESULTS/A3_L33 --csv RESULTS/ladder.csv
+sbatch slurm/ladder.sbatch              # all 7
+sbatch --array=1-3 slurm/ladder.sbatch  # just the pca:20 arms
+sbatch --array=0 slurm/ladder.sbatch    # just A0, a 2-minute smoke test
 ```
 
-Each run writes a **complete five-split `metrics.json`**, so `compare_arms.py`
-reads the four directories directly and **nothing needs merging**. Sharding at
-the split level would fragment `metrics.json` and require a merge step for no
-gain, since a whole arm takes only a few minutes.
+| Task | Arm | Pooling | Output |
+|---|---|---|---|
+| 0 | `onehot` | — | `RESULTS/A0_onehot` |
+| 1–3 | `L0`, `L15`, `L33` | `pca:20` | `RESULTS/A{1,2,3}_*_pca20` |
+| 4–6 | `L0`, `L15`, `L33` | `flatten` | `RESULTS/A{1,2,3}_*_flatten` |
+
+`--partition=tau --gres=gpu:1 --cpus-per-task=8 --mem=48G --time=02:00:00`.
+48G covers `flatten`'s ~15 GiB peak; the pca tasks need ~5 GiB. `PROJECT`,
+`PYTHON`, `EMBEDDINGS`, `SPLITS_DIR` and `RESULTS` are all overridable from the
+environment.
+
+Then:
+
+```bash
+python scripts/compare_arms.py RESULTS/A0_onehot RESULTS/A1_L0_pca20 \
+    RESULTS/A2_L15_pca20 RESULTS/A3_L33_pca20 --csv RESULTS/ladder_pca20.csv
+```
+
+### Trap: submitting from inside an allocation
+
+`sbatch` exports the submitting environment. Submitted from inside an
+interactive `srun`/`salloc` shell, that job's variables leak into the new one
+and contradict its allocation — all seven tasks failed instantly with:
+
+```
+srun: error: CPU binding outside of job step allocation, allocated CPUs are: 0x00AA00AA
+srun: error: Unable to satisfy cpu bind request
+No devices were found
+```
+
+The script therefore unsets `SLURM_CPU_BIND*`, `SLURM_STEP_GPUS`,
+`SLURM_GPUS_ON_NODE` and `GPU_DEVICE_ORDINAL`, and rebuilds
+`CUDA_VISIBLE_DEVICES` from `SLURM_JOB_GPUS`. It also does **not** wrap the
+python call in `srun`: for a single-task job that adds nothing and is what
+actually enforces the stale binding.
+
+### Sharding: one layer per task, not one split per task
+
+**Shard by layer, not by split.** Each task already does all five splits, so
+one task per layer is the right granularity and needs no extra flags. Each
+writes a **complete five-split `metrics.json`**, so `compare_arms.py` reads the
+output directories directly and **nothing needs merging**. Sharding at the
+split level would fragment `metrics.json` and need a merge step for no gain,
+since a whole arm takes only a few minutes.
+
+To run outside Slurm, the same thing by hand:
+
+```bash
+python train_mlp.py --output-dir RESULTS/A0_onehot          # no GPU, no cache
+python train_mlp.py --arm L33 --pooling pca:20 --device cuda \
+    --embeddings-dir /scratch/lmensi/peptide-HLA-stability/embeddings \
+    --output-dir RESULTS/A3_L33_pca20
+```
 
 ### Three things to get right
 
@@ -295,22 +342,65 @@ gain, since a whole arm takes only a few minutes.
    `hidden`, `epsilon` or split count differ, but it cannot treat a pooling
    mismatch as an error — it only prints it in the arm label, so this one is on
    the operator.
-3. **~4 GB RAM per shard** under `pca:20`: the cache is memory-mapped and
-   concurrent reads are safe, but each process materialises the training rows
-   as float32. Under `flatten` it is ~15.6 GiB per shard, so three concurrent
-   `flatten` runs need ~47 GiB.
+3. **~5 GiB RAM per shard** under `pca:20` or `mean`: the cache is
+   memory-mapped and concurrent reads are safe, but each process materialises
+   the training rows as float32 (4.3 GiB). Under `flatten` it is ~15 GiB per
+   shard, so three concurrent `flatten` runs need ~45 GiB.
 
-### These runs are not GPU bound
+### Cost, measured
 
-The head is `860 → 256 → 128 → 1` on ~17.7k rows — negligible compute. The time
-goes to reading and pooling 3.1 GB per layer, which is **CPU and I/O bound**.
-The speedup comes from running three *processes*; three separate GPUs are not
-required, and pointing all three at `--device cuda:0` performs about the same.
-Worth knowing before reserving hardware.
+Per split, on one GPU:
+
+| Arm | Features | Epochs run | Seconds/split |
+|---|---|---|---|
+| `onehot` | 860 | 48–85 | ~22 |
+| `L33` `pca:20` | 860 | ~250 | ~205 |
+| `L33` `flatten` | 55,040 | 77–115 | 128–171 |
+
+So a whole arm is **2–17 minutes**, not hours. Two things are counter-intuitive
+here:
+
+- **`pca:20` is slower per split than `flatten`**, despite 64× fewer features,
+  because it runs ~3× the epochs before early stopping. Per *epoch* `flatten`
+  is far more expensive; it just converges sooner.
+- **`flatten` genuinely uses the GPU** — the 55,040 × 256 first layer is one
+  large matmul, measured at 59% utilisation and 2.8 GiB. The narrow arms do
+  not: at 860 features the head is negligible and the time goes to loading and
+  pooling 3.1 GB per layer, which is CPU and I/O bound.
+
+A GPU per task is therefore worth it for `flatten` and close to irrelevant for
+the narrow arms, which would run about as fast sharing one device or on CPU.
 
 ---
 
 ## 10. Using an embedding cache extracted elsewhere
+
+### Where the cache lives
+
+On this cluster the cache is on **`/scratch`**, not in the repository and not
+in a session temp directory:
+
+```
+/scratch/lmensi/peptide-HLA-stability/embeddings/
+```
+
+```bash
+--embeddings-dir /scratch/lmensi/peptide-HLA-stability/embeddings
+```
+
+Why not elsewhere:
+
+| Location | Why not |
+|---|---|
+| repo / `/home` | NFS at **97% full**, 267 GB free and shared. The cache is 8.8 GB now, but A4 needs a 193-position layer-32 cache (13.9 GB) and a `GGGGS` ablation another 8.8 GB |
+| session temp dir | **`tmpfs`, i.e. RAM** — it would consume 8.8 GB of memory the training needs, vanish on reboot, and be invisible to a collaborator |
+| `/scratch` | 3.4 TB free, persistent, and `/scratch/<user>` is world-readable, so one extraction serves the whole team |
+
+Nothing hardcodes the path — `--embeddings-dir` exists for exactly this. Point
+`TORCH_HOME` at `/scratch` too, or the 2.5 GB of ESM-2 weights are
+re-downloaded every session.
+
+### Reusing a cache built elsewhere
 
 A collaborator who extracted on another machine needs the cache directory to
 hold `concat_L{0,15,33}.npy` and `index.json` together, passed as

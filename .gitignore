@@ -2,9 +2,15 @@ __pycache__/
 *.py[cod]
 
 # Embedding cache: 9.3 GB for the full run, regenerate with
-# scripts/extract_embeddings.py
+# scripts/extract_embeddings.py. Lives on /scratch in practice and is passed
+# with --embeddings-dir; this covers a local copy.
 embeddings/
 *.npy
+
+# Checkpoints from a flatten-pooled PLM arm are ~54 MiB each (a 55040x256
+# first layer), so ~270 MiB for five splits. The small A0 checkpoints in
+# RESULTS/ stay tracked.
+RESULTS/*_flatten/*.pt
 
 # Derived splits; metadata_*.json is kept so a split can be reproduced
 DATA/split/*.xlsx
@@ -13,3 +19,6 @@ DATA/split/*.png
 .ipynb_checkpoints/
 .venv/
 .DS_Store
+
+# Slurm job logs
+slurm/logs/
