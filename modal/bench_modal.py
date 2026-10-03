@@ -483,3 +483,74 @@ def finetune(gpus: str = "L4,A100-80GB,H100", out: str = "modal/finetune_results
         print(json.dumps(results[g], indent=2), flush=True)
     pathlib.Path(out).write_text(json.dumps(results, indent=2) + "\n")
     print(f"wrote {out}", flush=True)
+
+
+@app.local_entrypoint()
+def refine(out: str = "modal/refine_results.json"):
+    """Second pass: push concurrency to the memory limit and strip startup.
+
+    The first sweep understated every GPU twice over. It capped concurrency at
+    4 or 8 while per-worker memory is only ~2.8-3.5 GiB, so an 80 GiB H100 was
+    using a third of its memory; and at 6 complexes per worker the ~55 s
+    `boltz predict` start-up dominated, which inflates s/complex by roughly
+    half.
+
+    Both are fixed here. Concurrency is set from the measured per-worker
+    footprint against each card's memory, and each GPU is run at two values of
+    n so the **marginal** cost per complex falls out of the slope:
+
+        steady_state = (wall(n_hi) - wall(n_lo)) / ((n_hi - n_lo) * concurrency)
+
+    That slope is what production pays, because the extractor runs
+    --batch-size 256 and amortises start-up over the whole shard.
+    """
+    import json as _json
+
+    # concurrency chosen from peak_device_MiB in the first sweep vs card memory,
+    # leaving ~25% headroom
+    plan = {"L4": 6, "A10G": 6, "L40S": 12, "H100": 20, "B200": 32}
+    n_lo, n_hi = 6, 18
+    results = {}
+    for gpu, conc in plan.items():
+        lo = _json.loads(FUNCS[gpu].spawn(n=n_lo, concurrencies=[conc]).get())
+        hi = _json.loads(FUNCS[gpu].spawn(n=n_hi, concurrencies=[conc]).get())
+        rec = {"gpu": gpu, "concurrency": conc,
+               "price_per_hour": lo["price_per_hour"], "lo": lo, "hi": hi}
+        try:
+            rlo, rhi = lo["runs"][0], hi["runs"][0]
+            if rlo["ok"] and rhi["ok"]:
+                d_wall = rhi["wall_seconds"] - rlo["wall_seconds"]
+                d_cx = rhi["n_produced"] - rlo["n_produced"]
+                steady = d_wall / d_cx if d_cx else None
+                rec |= {
+                    "apparent_s_per_cx_hi": rhi.get("seconds_per_complex"),
+                    "steady_s_per_cx": round(steady, 3) if steady else None,
+                    "implied_startup_s": round(
+                        rhi["wall_seconds"] - steady * rhi["n_produced"], 1) if steady else None,
+                    "peak_device_MiB": max(rlo.get("peak_device_MiB", 0),
+                                           rhi.get("peak_device_MiB", 0)),
+                }
+                if steady:
+                    rec |= {
+                        "dollars_per_complex": round(PRICES[gpu] * steady, 6),
+                        "cost_full_28166": round(PRICES[gpu] * steady * 28166, 2),
+                        "cost_pilot_2814": round(PRICES[gpu] * steady * 2814, 2),
+                    }
+        except (KeyError, IndexError, TypeError) as exc:
+            rec["error"] = f"{type(exc).__name__}: {exc}"
+        results[gpu] = rec
+        print(_json.dumps({k: v for k, v in rec.items() if k not in ("lo", "hi")},
+                          indent=2), flush=True)
+
+    ranked = sorted((r for r in results.values() if r.get("dollars_per_complex")),
+                    key=lambda r: r["dollars_per_complex"])
+    print("\n=== refined, steady state, ranked by $/complex ===", flush=True)
+    for r in ranked:
+        print("%-6s conc=%-3d %5.2f s/cx (apparent %5.2f)  $%.6f/cx  "
+              "full $%6.2f  pilot $%5.2f  %5d MiB"
+              % (r["gpu"], r["concurrency"], r["steady_s_per_cx"],
+                 r["apparent_s_per_cx_hi"], r["dollars_per_complex"],
+                 r["cost_full_28166"], r["cost_pilot_2814"],
+                 r["peak_device_MiB"]), flush=True)
+    pathlib.Path(out).write_text(_json.dumps(results, indent=2) + "\n")
+    print(f"\nwrote {out}", flush=True)
