@@ -53,6 +53,19 @@ import numpy as np
 from extract_embeddings import SOURCE_ROW_OFFSET
 
 CACHED_ARMS = {"L0": "concat_L0.npy", "L15": "concat_L15.npy", "L33": "concat_L33.npy"}
+
+# Boltz-2 trunk arms (B*), built by scripts/extract_boltz.py. They use the same
+# 43 slots and the same row order as the ESM-2 arms, so they are scored on
+# identical positions of identical rows and the ladder stays paired.
+#   BZS   trunk single representation         (n, 43, 384)
+#   BZZ   interface pair contraction, 1/d^2   (n, 43, 128)
+#   BZZU  same contraction, uniform weights   (n, 43, 128)  -- weighting ablation
+# BZZ is the one that tests the actual hypothesis: ESM-2 has no representation
+# of residue pairs, so the pair tensor is the only thing Boltz adds that a
+# sequence model cannot express.
+BOLTZ_ARMS = {"BZS": "boltz_S.npy", "BZZ": "boltz_Z.npy", "BZZU": "boltz_ZU.npy"}
+CACHED_ARMS |= BOLTZ_ARMS
+
 ONEHOT_ARM = "onehot"
 ARMS = (ONEHOT_ARM, *CACHED_ARMS)
 

@@ -27,3 +27,8 @@ slurm/logs/
 # Sweep runs: 33 directories of checkpoints and per-run metrics, regenerate
 # with slurm/sweep_width.sbatch
 RESULTS/sweep/
+
+# Boltz-2 arm
+DATA/rasmussen_clean.csv
+boltz_cache/
+boltz_*.npy
