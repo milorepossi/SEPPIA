@@ -65,13 +65,48 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from extract_embeddings import (  # noqa: E402  reuse, never restate, the layout
+    HLA_COLUMN,
     HLA_LEN,
+    PEPTIDE_COLUMN,
     PEPTIDE_LEN,
+    PSEUDOSEQ_COLUMN,
     PSEUDOSEQ_INDICES,
+    SOURCE_ROW_OFFSET,
     assert_pseudoseq_indices,
-    load_rows,
     slot_layout,
 )
+
+
+def load_rows_any(dataset_path, limit=None, sheet=0):
+    """``extract_embeddings.load_rows`` but accepting CSV as well as XLSX.
+
+    The upstream loader is ``pd.read_excel`` only, and the clean target lives in
+    a CSV (the committed XLSX has an Excel-mangled half-life column that is not
+    losslessly invertible -- see scripts/pilot_subset.py). Everything else here
+    follows the upstream convention exactly, including SOURCE_ROW_OFFSET, so
+    array index i holds source_row i + SOURCE_ROW_OFFSET.
+    """
+    import pandas as pd
+
+    path = Path(dataset_path)
+    frame = (pd.read_csv(path) if path.suffix.lower() == ".csv"
+             else pd.read_excel(path, sheet_name=sheet))
+    for column in (HLA_COLUMN, PEPTIDE_COLUMN, PSEUDOSEQ_COLUMN):
+        if column not in frame.columns:
+            raise ValueError(f"dataset is missing column {column!r}")
+    frame = frame.reset_index(drop=True)
+    frame["source_row"] = np.arange(
+        SOURCE_ROW_OFFSET, len(frame) + SOURCE_ROW_OFFSET, dtype=np.int64)
+
+    lengths = set(frame[HLA_COLUMN].str.len().unique())
+    assert lengths == {HLA_LEN}, f"expected all hla_seq to be {HLA_LEN} aa, saw {sorted(lengths)}"
+    lengths = set(frame[PEPTIDE_COLUMN].str.len().unique())
+    assert lengths == {PEPTIDE_LEN}, f"expected all peptides to be {PEPTIDE_LEN} aa, saw {sorted(lengths)}"
+
+    if limit is not None:
+        frame = frame.iloc[:limit].copy()
+    rows = frame[[HLA_COLUMN, PEPTIDE_COLUMN, PSEUDOSEQ_COLUMN, "source_row"]].to_dict("records")
+    return frame, rows
 
 TOKEN_S = 384
 TOKEN_Z = 128
@@ -287,7 +322,7 @@ def check_free_space(out_dir: Path, n_rows: int, n_slots: int) -> dict:
 # --------------------------------------------------------------------------- #
 def run_boltz(in_dir: Path, out_dir: Path, cache: Path, *, sampling_steps: int,
               recycling_steps: int, use_msa_server: bool, num_workers: int,
-              extra_args: list[str] | None = None) -> None:
+              no_kernels: bool = True, extra_args: list[str] | None = None) -> None:
     cmd = [
         "boltz", "predict", str(in_dir),
         "--out_dir", str(out_dir),
@@ -301,6 +336,13 @@ def run_boltz(in_dir: Path, out_dir: Path, cache: Path, *, sampling_steps: int,
         "--override",
         *(extra_args or []),
     ]
+    if no_kernels:
+        # Boltz-2 2.2.1 imports cuequivariance_torch for triangle
+        # multiplication and raises ModuleNotFoundError if it is absent rather
+        # than falling back. --no_kernels takes the pure-PyTorch path. Measured
+        # in BENCHMARK.md; the kernel path is faster but its wheels are built
+        # per CUDA version and the job image ships CUDA 13.
+        cmd.append("--no_kernels")
     if use_msa_server:
         cmd.append("--use_msa_server")
     proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -323,7 +365,8 @@ def locate_outputs(boltz_out: Path, rid: str) -> tuple[Path, Path]:
 def extract(dataset_path, out_dir, *, source_rows=None, msa_dir=None,
             boltz_cache=None, work_dir=None, batch_size=32, sampling_steps=10,
             recycling_steps=3, use_msa_server=False, num_workers=2,
-            limit=None, resume=True, progress_callback=None) -> dict:
+            no_kernels=True, limit=None, resume=True,
+            progress_callback=None) -> dict:
     """Extract and cache Boltz-2 trunk features. Returns a summary dict.
 
     Takes every path as an argument and reads nothing from the environment, so
@@ -335,18 +378,23 @@ def extract(dataset_path, out_dir, *, source_rows=None, msa_dir=None,
     boltz_cache.mkdir(parents=True, exist_ok=True)
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    rows = load_rows(dataset_path, limit=None)
+    frame, rows = load_rows_any(dataset_path, limit=None)
+
+    # Assertion 1: the contact indices really do reconstruct hla_pseudoseq, for
+    # every allele. Runs before any GPU time is spent, as in the ESM-2
+    # extractor, so a bad index list costs nothing.
+    assert_pseudoseq_indices(frame, PSEUDOSEQ_INDICES)
+
     if source_rows is not None:
         wanted = {int(v) for v in source_rows}
         rows = [r for r in rows if int(r["source_row"]) in wanted]
+        missing = wanted - {int(r["source_row"]) for r in rows}
+        if missing:
+            raise ValueError(f"{len(missing)} requested source_rows are not in the dataset")
     if limit is not None:
         rows = rows[:limit]
     if not rows:
         raise ValueError("no rows selected")
-
-    # Assertion 1: the contact indices really do reconstruct hla_pseudoseq.
-    # Runs before any GPU time is spent, exactly as in the ESM-2 extractor.
-    assert_pseudoseq_indices(rows, PSEUDOSEQ_INDICES)
 
     concat_positions, peptide_slots, pseudoseq_slots = slot_layout(linker="")
     concat_positions = np.asarray(concat_positions)
@@ -361,7 +409,12 @@ def extract(dataset_path, out_dir, *, source_rows=None, msa_dir=None,
 
     summary = {"n_rows": len(rows), "n_slots": n_slots, "resumed_at": done,
                "sampling_steps": sampling_steps, "recycling_steps": recycling_steps,
-               **space, "batches": []}
+               **space, "batches": [], "max_abs": {k: 0.0 for k in ARRAYS}}
+    # The cache is float16 (ceiling 65504). ESM-2 layer 15 peaked at 223, but
+    # Boltz-2's z is a different distribution and its range is not documented,
+    # so the magnitude is tracked and overflow is an error rather than a silent
+    # inf. Caught by scripts/test_extract_boltz.py.
+    f16_max = float(np.finfo(np.float16).max)
     started = time.monotonic()
 
     for start in range(done, len(rows), batch_size):
@@ -375,13 +428,19 @@ def extract(dataset_path, out_dir, *, source_rows=None, msa_dir=None,
         t0 = time.monotonic()
         run_boltz(in_dir, boltz_out, boltz_cache, sampling_steps=sampling_steps,
                   recycling_steps=recycling_steps, use_msa_server=use_msa_server,
-                  num_workers=num_workers)
+                  num_workers=num_workers, no_kernels=no_kernels)
         predict_seconds = time.monotonic() - t0
 
         for offset, rid in enumerate(ids):
             emb, pdb = locate_outputs(boltz_out, rid)
             reduced = reduce_one(emb, pdb, concat_positions)
             for name, block in reduced.items():
+                peak = float(np.abs(block).max())
+                if peak > f16_max:
+                    raise OverflowError(
+                        f"{name} row {start + offset} peaks at {peak:.4g}, above the "
+                        f"float16 ceiling {f16_max:.0f}; store this array as float32")
+                summary["max_abs"][name] = max(summary["max_abs"][name], peak)
                 arrays[name][start + offset] = block.astype(np.float16)
 
         batch_stat = {"start": start, "n": len(chunk),
@@ -427,6 +486,9 @@ def main() -> int:
     ap.add_argument("--recycling-steps", type=int, default=3)
     ap.add_argument("--use-msa-server", action="store_true")
     ap.add_argument("--num-workers", type=int, default=2)
+    ap.add_argument("--use-kernels", dest="no_kernels", action="store_false",
+                    help="use the cuequivariance triangle kernels (needs "
+                         "cuequivariance-torch matching the image's CUDA)")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--no-resume", dest="resume", action="store_false")
     args = ap.parse_args()
@@ -443,8 +505,8 @@ def main() -> int:
                       sampling_steps=args.sampling_steps,
                       recycling_steps=args.recycling_steps,
                       use_msa_server=args.use_msa_server,
-                      num_workers=args.num_workers, limit=args.limit,
-                      resume=args.resume)
+                      num_workers=args.num_workers, no_kernels=args.no_kernels,
+                      limit=args.limit, resume=args.resume)
     print(json.dumps({k: v for k, v in summary.items() if k != "batches"}, indent=2))
     return 0
 
