@@ -3,9 +3,27 @@
 
 Example:
     python train_mlp.py --splits-dir DATA --output-dir RESULTS
+    python train_mlp.py --arm L33 --pooling pca:20 --output-dir RESULTS/L33
 
-Features are the peptide (9 residues) stacked with the HLA pseudosequence
-(34 residues), one-hot encoded over the 20 amino acids, so 43*20 = 860 inputs.
+One MLP block serves every arm of the ladder; --arm changes only the input
+representation, and every other hyperparameter is held fixed so the arms share
+a budget:
+
+    onehot  A0  one-hot of the 43 kept positions, no PLM    (the default)
+    L0      A1  ESM-2 layer 0, context-free control
+    L15     A2  ESM-2 layer 15, mid-stack
+    L33     A3  ESM-2 layer 33, final
+
+The PLM arms read scripts/extract_embeddings.py's cache and join to a split on
+source_row; --pooling decides how each row's (43, 1280) block becomes a vector
+and therefore whether the arms also share a first-layer width. See
+scripts/arm_features.py for what pooling and standardisation do to the
+comparison. Anything fitted to the features is fitted on the training rows
+only.
+
+Features for the default arm are the peptide (9 residues) stacked with the HLA
+pseudosequence (34 residues), one-hot encoded over the 20 amino acids, so
+43*20 = 860 inputs.
 The target is ln(thalf_hours + epsilon); epsilon regularizes the 20% of rows
 whose half-life is exactly zero. It defaults to 0.1, the reporting resolution
 of the assay: smaller values push the zero rows far below the rest and let them
@@ -22,12 +40,16 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import sys
 import time
 
 import numpy as np
 import pandas as pd
 import torch
 from torch import nn
+
+sys.path.insert(0, str(Path(__file__).resolve().parent/'scripts'))
+import arm_features
 
 AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY'
 # Reference data-viz palette: categorical slots, chart chrome and ink.
@@ -54,14 +76,24 @@ def one_hot(sequences, length):
     return encoded.reshape(len(sequences), -1)
 
 
-def features_and_target(dataset, epsilon, peptide_length=9, pseudoseq_length=34):
-    """Stack peptide and pseudosequence encodings; return features, log target, rows."""
-    peptide = one_hot(dataset['peptide'], peptide_length)
-    pseudoseq = one_hot(dataset['hla_pseudoseq'], pseudoseq_length)
+def features_and_target(dataset, epsilon, peptide_length=9, pseudoseq_length=34,
+                        encoder=None):
+    """Encode features; return features, log target, rows.
+
+    With no encoder this is arm A0: the peptide stacked with the HLA
+    pseudosequence, one-hot over the 20 amino acids. An encoder replaces the
+    features with another representation of the same rows, which is the only
+    thing that differs between arms of the ladder.
+    """
+    if encoder is None:
+        features = np.hstack((one_hot(dataset['peptide'], peptide_length),
+                              one_hot(dataset['hla_pseudoseq'], pseudoseq_length)))
+    else:
+        features = encoder(dataset)
     half_life = dataset['thalf_hours'].astype(np.float64)
     if not np.isfinite(half_life).all() or (half_life < 0).any():
         raise ValueError('Half-lives must be finite and nonnegative')
-    return (np.hstack((peptide, pseudoseq)),
+    return (features,
             np.log(half_life + epsilon).astype(np.float32),
             dataset['source_row'])
 
@@ -114,7 +146,9 @@ def metrics(truth, prediction):
 
 def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
                     batch_size, learning_rate, weight_decay, dropout, hidden,
-                    validation_fraction, device):
+                    validation_fraction, device, arm=arm_features.ONEHOT_ARM,
+                    embeddings_dir='embeddings', pooling='flatten',
+                    standardise='auto'):
     """Train, early-stop and score one split. Return history and metrics."""
     started = time.monotonic()
     train_file = Path(splits_dir)/f'training_{split_index}.npz'
@@ -123,17 +157,34 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
         train_raw = {key: data[key] for key in data.files}
     with np.load(test_file) as data:
         test_raw = {key: data[key] for key in data.files}
-    x_all, y_all, _ = features_and_target(train_raw, epsilon)
-    x_test, y_test, _ = features_and_target(test_raw, epsilon)
 
     rng = np.random.default_rng(seed)
-    order = rng.permutation(len(x_all))
+    order = rng.permutation(len(train_raw['source_row']))
     n_validation = int(round(len(order)*validation_fraction))
     if not 0 < n_validation < len(order):
         raise ValueError('validation_fraction leaves no training or validation rows')
     validation_idx, train_idx = order[:n_validation], order[n_validation:]
+
+    # Any fitted feature transform sees the training rows only, never the
+    # validation rows it early-stops on and never the test set.
+    encoder = None
+    explained_variance = None
+    if arm != arm_features.ONEHOT_ARM:
+        encoder = arm_features.CachedArmEncoder(embeddings_dir, arm, pooling)
+        encoder.fit({key: value[train_idx] for key, value in train_raw.items()})
+        explained_variance = encoder.explained_variance
+
+    x_all, y_all, _ = features_and_target(train_raw, epsilon, encoder=encoder)
+    x_test, y_test, _ = features_and_target(test_raw, epsilon, encoder=encoder)
     x_train, y_train = x_all[train_idx], y_all[train_idx]
     x_validation, y_validation = x_all[validation_idx], y_all[validation_idx]
+
+    standardiser = None
+    if arm_features.should_standardise(arm, standardise):
+        standardiser = arm_features.Standardiser().fit(x_train)
+        x_train, x_validation, x_test = (standardiser(x_train),
+                                         standardiser(x_validation),
+                                         standardiser(x_test))
 
     # Standardize the target with training statistics only; errors are reported
     # back in log units.
@@ -196,7 +247,9 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
     subsets = dict(all=np.ones(len(y_test), dtype=bool),
                    seen_both=~unseen_peptide & ~unseen_hla,
                    unseen_peptide=unseen_peptide, unseen_hla=unseen_hla)
-    return dict(split_index=split_index,
+    return dict(split_index=split_index, arm=arm, pooling=pooling,
+                standardised=standardiser is not None,
+                explained_variance=explained_variance,
                 train_rows=int(len(x_train)), validation_rows=int(len(x_validation)),
                 test_rows=int(len(x_test)), features=int(x_train.shape[1]),
                 target_center=center, target_scale=scale,
@@ -207,6 +260,11 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
                 test_subsets={name: metrics(y_test[mask], predictions[mask])
                               for name, mask in subsets.items() if mask.any()},
                 history=history, seed=seed, train_seconds=time.monotonic()-started), model
+
+
+def error_bars(values):
+    """Whisker heights for a per-split mean; None when one split leaves them undefined."""
+    return values.std(axis=0, ddof=1) if len(values) > 1 else None
 
 
 def style_axes(ax):
@@ -281,7 +339,7 @@ def test_error_figure(results, path):
     for offset, (source, color, label) in enumerate(
             [('test', COLORS['train'], 'MLP'), ('baseline', COLORS['baseline'], 'Train-mean baseline')]):
         values = np.array([[result[source][key] for key, _ in error_metrics] for result in results])
-        means, deviations = values.mean(axis=0), values.std(axis=0, ddof=1)
+        means, deviations = values.mean(axis=0), error_bars(values)
         x = positions + (offset-0.5)*0.3
         left.bar(x, means, width=0.26, color=color, label=label, zorder=2)
         left.errorbar(x, means, yerr=deviations, fmt='none', ecolor=COLORS['ink'],
@@ -298,7 +356,7 @@ def test_error_figure(results, path):
     positions = np.arange(len(subsets))
     rmse = np.array([[result['test_subsets'][name]['rmse'] for name, _ in subsets]
                      for result in results])
-    means, deviations = rmse.mean(axis=0), rmse.std(axis=0, ddof=1)
+    means, deviations = rmse.mean(axis=0), error_bars(rmse)
     middle.bar(positions, means, width=0.5, color=COLORS['train'], zorder=2)
     middle.errorbar(positions, means, yerr=deviations, fmt='none', ecolor=COLORS['ink'],
                     elinewidth=1.2, capsize=4, zorder=3)
@@ -314,7 +372,7 @@ def test_error_figure(results, path):
     names = [('pearson', 'Pearson r'), ('spearman', 'Spearman rho')]
     positions = np.arange(len(names))
     values = np.array([[result['test'][key] for key, _ in names] for result in results])
-    means, deviations = values.mean(axis=0), values.std(axis=0, ddof=1)
+    means, deviations = values.mean(axis=0), error_bars(values)
     right.bar(positions, means, width=0.4, color=COLORS['gradient'], zorder=2)
     right.errorbar(positions, means, yerr=deviations, fmt='none', ecolor=COLORS['ink'],
                    elinewidth=1.2, capsize=4, zorder=3)
@@ -363,8 +421,13 @@ def summary_table(results):
 def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=300,
         patience=25, batch_size=256, learning_rate=1e-3, weight_decay=1e-5,
         dropout=0.2, hidden=(256, 128), validation_fraction=0.1, splits=5,
-        device=None, save_models=True):
-    """Train one MLP per split, write metrics, figures and optional weights."""
+        device=None, save_models=True, arm=arm_features.ONEHOT_ARM,
+        embeddings_dir='embeddings', pooling='flatten', standardise='auto'):
+    """Train one MLP per split, write metrics, figures and optional weights.
+
+    arm selects the input representation; everything else is held fixed, so a
+    run differs from another arm's run only in its features.
+    """
     device = torch.device(device or ('cuda' if torch.cuda.is_available() else 'cpu'))
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -373,25 +436,37 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
         result, model = train_one_split(index, splits_dir, epsilon=epsilon,
             seed=seed+index, epochs=epochs, patience=patience, batch_size=batch_size,
             learning_rate=learning_rate, weight_decay=weight_decay, dropout=dropout,
-            hidden=tuple(hidden), validation_fraction=validation_fraction, device=device)
+            hidden=tuple(hidden), validation_fraction=validation_fraction, device=device,
+            arm=arm, embeddings_dir=embeddings_dir, pooling=pooling,
+            standardise=standardise)
         if save_models:
             torch.save(dict(state_dict=model.state_dict(), hidden=tuple(hidden),
                             dropout=dropout, features=result['features'],
                             target_center=result['target_center'],
-                            target_scale=result['target_scale'], epsilon=epsilon),
+                            target_scale=result['target_scale'], epsilon=epsilon,
+                            arm=arm, pooling=pooling),
                        out/f'mlp_split_{index}.pt')
-        print(f"split {index}: best epoch {result['best_epoch']}/{result['epochs_run']}  "
+        print(f"[{arm}] split {index}: {result['features']} features  "
+              f"best epoch {result['best_epoch']}/{result['epochs_run']}  "
               f"test RMSE {result['test']['rmse']:.3f}  "
               f"Spearman {result['test']['spearman']:.3f}  "
               f"({result['train_seconds']:.1f}s)", flush=True)
         results.append(result)
     convergence_figure(results, out/'convergence.png')
     test_error_figure(results, out/'test_error.png')
+    onehot_scheme = 'one-hot of peptide stacked with HLA pseudosequence'
     report = dict(created_at=datetime.now(timezone.utc).isoformat(),
                   splits_dir=str(Path(splits_dir).resolve()), device=str(device),
+                  arm=dict(name=arm, pooling=pooling, standardise=standardise,
+                           standardised=results[0]['standardised'],
+                           embeddings_dir=(None if arm == arm_features.ONEHOT_ARM
+                                           else str(Path(embeddings_dir).resolve())),
+                           explained_variance=results[0]['explained_variance']),
                   encoding=dict(alphabet=AMINO_ACIDS, peptide_length=9,
                                 pseudoseq_length=34, features=results[0]['features'],
-                                scheme='one-hot of peptide stacked with HLA pseudosequence'),
+                                scheme=(onehot_scheme if arm == arm_features.ONEHOT_ARM
+                                        else f'ESM-2 {arm} of the same 43 positions, '
+                                             f'pooled with {pooling}')),
                   target=dict(transform='ln(thalf_hours + epsilon)', epsilon=epsilon,
                               standardized_for_training=True, units='log hours'),
                   model=dict(hidden=list(hidden), dropout=dropout, optimizer='Adam',
@@ -426,6 +501,19 @@ def main():
     parser.add_argument('--splits', type=int, default=5)
     parser.add_argument('--device', default=None, help='cpu, cuda or mps; autodetected by default')
     parser.add_argument('--no-save-models', dest='save_models', action='store_false')
+    parser.add_argument('--arm', default=arm_features.ONEHOT_ARM, choices=arm_features.ARMS,
+                        help='Input representation: onehot (A0, no cache needed) or '
+                             'L0/L15/L33 (A1-A3, from the embedding cache)')
+    parser.add_argument('--embeddings-dir', default='embeddings',
+                        help='Directory holding concat_L*.npy and index.json')
+    parser.add_argument('--pooling', default='flatten',
+                        help='flatten (43*D features), mean (2*D, over the peptide and '
+                             'HLA blocks) or pca:K (43*K, one D->K projection fitted on '
+                             'the training rows; pca:20 matches A0 feature for feature)')
+    parser.add_argument('--standardise', default='auto', choices=('auto', 'always', 'never'),
+                        help='Standardise features with training statistics. auto skips '
+                             'the already unit-scale one-hot arm and standardises the '
+                             'PLM arms, whose layers differ in scale by ~16x')
     args = vars(parser.parse_args())
     report = run(args.pop('splits_dir'), args.pop('output_dir'), **args)
     print(json.dumps({key: dict(mean=value['mean'], sd=value['sd'])

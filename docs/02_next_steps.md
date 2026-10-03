@@ -256,23 +256,72 @@ The first is less work and keeps one training loop, which matters because the
 arms must share a hyperparameter budget. Either way the duplicated one-hot
 encoder should collapse onto `features.py`.
 
-## 4. Shared head and training loop — `scripts/train_head.py`
+## 4. Shared head and training loop — `train_mlp.py --arm` (implemented)
 
-One module, one architecture, `--features {blosum,L0,L15,L33}` selecting the input
-only.
+The ladder runs through the existing `train_mlp.py` rather than a second
+trainer, so every arm shares one training loop, one metrics format and one set
+of figures — which is what makes the shared hyperparameter budget real rather
+than aspirational. `scripts/arm_features.py` supplies the inputs.
 
-- MLP: `in -> 512 -> 256 -> 1`, GELU, dropout 0.1, LayerNorm; AdamW, cosine
-  schedule, early stopping on a validation slice **carved out of train** (never
-  test).
-- Fixed budget: identical epochs/LR/batch for every arm. If any hyperparameter is
-  tuned, tune it per arm with the same search budget and report the budget.
-- Seeds: ≥3 per (arm, split) ⇒ 4 arms × 5 splits × 3 seeds = 60 cheap runs on
-  pooled features.
-- Log per run: split, arm, seed, Spearman, Pearson, RMSE, n_train, n_test, plus
-  metrics on the test-exclusive HLA and peptide strata (the splits guarantee ≥5
-  unseen HLAs and ≥100 unseen peptides — the generalisation question worth
-  answering).
-- Write one tidy `results.csv`; keep plotting separate.
+```bash
+python train_mlp.py --output-dir RESULTS/A0_onehot                        # A0
+python train_mlp.py --arm L0  --pooling pca:20 --output-dir RESULTS/A1_L0  # A1
+python train_mlp.py --arm L15 --pooling pca:20 --output-dir RESULTS/A2_L15 # A2
+python train_mlp.py --arm L33 --pooling pca:20 --output-dir RESULTS/A3_L33 # A3
+```
+
+`--arm onehot` is the default and reproduces the committed A0 results exactly;
+only the input changes between arms.
+
+### `--pooling`: the choice that decides whether the budget is shared
+
+Each cached row is `(43, 1280)`. How it becomes a vector sets the first layer's
+width, so it, not the MLP, is the real experimental decision.
+
+| `--pooling` | A0 features | PLM features | First layer vs A0 |
+|---|---|---|---|
+| `flatten` | 860 | 55,040 | **64× the parameters** |
+| `mean` | 40 | 2,560 | 3×, but discards position within each block |
+| `pca:20` | 860 | **860** | **identical** |
+
+`pca:20` is the recommended headline: one 1280→20 projection fitted on the
+training rows and applied at every position, so every arm has exactly A0's 860
+inputs and an identical first layer, and only the feature *content* differs.
+It is also principled rather than arbitrary — layer 0's embedding matrix has
+rank exactly 20 on this alphabet, so `pca:20` is **lossless for A1**, making
+A0 vs A1 information-, dimension- and parameter-matched all at once.
+
+It is lossy for layers 15 and 33, which is the question the ladder asks: given
+one budget, which representation carries more signal? Run `flatten` as a
+secondary check on whether 20 components starve the deeper layers — but report
+it as a different experiment, since the arms no longer share a budget there.
+`flatten` also peaks at ~15.6 GiB of RAM per split (vs 0.24 GiB for `pca:20`),
+which matters on Modal.
+
+### `--standardise`
+
+`auto` (default) standardises the PLM arms and leaves one-hot alone, since
+one-hot is already unit-scale and this keeps A0's published numbers
+reproducible. Standardisation is **required** for the PLM arms: layer 33 is
+post-`emb_layer_norm_after` and layer 15 is not (mean abs 0.145 vs 2.344), so
+without it A2 vs A3 partly measures input scaling. Use `always` for a strictly
+identical pipeline across all four arms, at the cost of A0's numbers shifting
+slightly.
+
+Everything fitted to features — the PCA projection and the standardiser — is fit
+on the **training rows only**, excluding the validation rows used for early
+stopping and the test set entirely.
+
+### Still to do here
+
+- Seeds: ≥3 per (arm, split). Currently one seed per split, so the reported sd
+  conflates split difficulty with seed noise. `--seed` shifts the base; the loop
+  uses `seed + split_index`.
+- Write one tidy `results.csv` across arms; keep plotting separate. Right now
+  each arm writes its own `metrics.json`, which `arm` and `pooling` fields now
+  identify.
+- Fix `unseen_hla` to key on `hla_seq`, not `hla_pseudoseq` (see §0.4) before
+  reading the per-stratum numbers across arms.
 
 ## 5. Analysis
 
