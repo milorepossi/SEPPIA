@@ -554,3 +554,46 @@ def refine(out: str = "modal/refine_results.json"):
                  r["peak_device_MiB"]), flush=True)
     pathlib.Path(out).write_text(_json.dumps(results, indent=2) + "\n")
     print(f"\nwrote {out}", flush=True)
+
+
+# --------------------------------------------------------------------------- #
+# CPU-allocation test
+# --------------------------------------------------------------------------- #
+# The first sweep requested no `cpu=`, so every container shared a default
+# allocation while each boltz worker also spawns `--num_workers 2` dataloader
+# workers. These functions request CPU in proportion to the worker count, to
+# separate a genuine GPU ceiling from CPU starvation.
+@app.function(gpu="L4", cpu=16.0, memory=32768, volumes=VOLUMES, timeout=3600,
+              name="bench_l4_cpu")
+def bench_l4_cpu(n: int = 12, concurrencies: list[int] = [4, 8]):
+    return json.dumps(_bench_body("L4", n, concurrencies, True))
+
+
+@app.function(gpu="H100", cpu=32.0, memory=65536, volumes=VOLUMES, timeout=3600,
+              name="bench_h100_cpu")
+def bench_h100_cpu(n: int = 12, concurrencies: list[int] = [8, 16]):
+    return json.dumps(_bench_body("H100", n, concurrencies, True))
+
+
+@app.local_entrypoint()
+def cputest(out: str = "modal/cputest_results.json"):
+    """Re-run the top two cards with CPU requested in proportion to workers."""
+    jobs = {"L4": bench_l4_cpu.spawn(), "H100": bench_h100_cpu.spawn()}
+    results = {}
+    for gpu, h in jobs.items():
+        try:
+            results[gpu] = json.loads(h.get())
+        except Exception as exc:
+            results[gpu] = {"gpu": gpu, "fatal": f"{type(exc).__name__}: {exc}"}
+        r = results[gpu]
+        print(f"--- {gpu} (cpu requested) ---", flush=True)
+        for run in r.get("runs", []):
+            print("  conc=%-3d %6.2f s/cx  wall %6.1fs  %3d/%-3d ok=%s  %6d MiB  $%.6f/cx"
+                  % (run["concurrency"], run.get("seconds_per_complex", -1),
+                     run["wall_seconds"], run["n_produced"], run["n_requested"],
+                     run["ok"], run.get("peak_device_MiB", -1),
+                     PRICES[gpu] * run.get("seconds_per_complex", 0)), flush=True)
+        if r.get("fatal"):
+            print("  FATAL:", r["fatal"], flush=True)
+    pathlib.Path(out).write_text(json.dumps(results, indent=2) + "\n")
+    print(f"wrote {out}", flush=True)
