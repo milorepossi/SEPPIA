@@ -220,8 +220,8 @@ positions. Keep it out of `features.py` so nothing in the feature path is ever
 aware of splits.
 
 ```
-index.json["source_row"]  -->  position in concat_*.npy   (identity today: row i == source_row i)
-training_{i}.xlsx.source_row  -->  np.searchsorted / dict lookup  -->  row indices
+index.json["source_row"]  -->  position in concat_*.npy   (row i == source_row i + SOURCE_ROW_OFFSET)
+training_{i}.npz.source_row   -->  np.searchsorted / dict lookup  -->  row indices
 ```
 
 Applies uniformly to `concat_onehot.npy` and `concat_L{0,15,33}.npy`, which share
@@ -232,10 +232,29 @@ extraction has not run yet.
   train+test for one layer is ~0.1 GB, so cache pooled arrays to `.npy` and
   training becomes CPU-cheap and instant to iterate on.
 - **Assert** `index.json["source_row"]` covers every `source_row` in both split
-  files and that the recovered `(hla_seq, peptide)` pair matches the xlsx row —
-  this is the one place a silent misalignment could still enter.
-- Assert the union of train and test `source_row` is exactly `0..28165`, once per
+  files and that the joined `(peptide, hla_pseudoseq)` matches the split file's
+  own strings — this is the one place a silent misalignment could still enter,
+  and the `source_row` offset bug proved the assertion is not theoretical.
+- Assert the union of train and test `source_row` is exactly `2..28167`, once per
   split.
+- Import `SOURCE_ROW_OFFSET` from `extract_embeddings`; do not write `2`.
+
+Verified against all 10 split files after the offset fix: every row's decoded
+one-hot matches the split's own `peptide` and `hla_pseudoseq`.
+
+## 3b. Also still missing — `scripts/train_head.py` vs `train_mlp.py`
+
+`train_mlp.py` (root) already trains the A0 arm end to end, but reads features
+from `DATA/*.npz` and re-implements the one-hot encoding, so it does not touch
+the cache or `source_row` at all. Decide one of:
+
+- extend `train_mlp.py` with a `--features` flag that loads `concat_*.npy` by
+  `source_row` join, keeping its training loop, metrics and figures; or
+- keep it as the A0 reference and write the ladder runner separately.
+
+The first is less work and keeps one training loop, which matters because the
+arms must share a hyperparameter budget. Either way the duplicated one-hot
+encoder should collapse onto `features.py`.
 
 ## 4. Shared head and training loop — `scripts/train_head.py`
 

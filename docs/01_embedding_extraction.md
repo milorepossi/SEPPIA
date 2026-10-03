@@ -24,9 +24,16 @@ embeddings/
 ```
 
 **The cache is split-agnostic.** Row `i` of every array corresponds to
-`index.json["pairs"][i]` and to `source_row == i`. A split selects its rows by
-joining on `source_row`. One extraction serves all 5 splits and all arms; nothing
-is keyed by split.
+`index.json["pairs"][i]` and to `source_row == i + 2`. A split selects its rows
+by joining on `source_row`. One extraction serves all 5 splits and all arms;
+nothing is keyed by split.
+
+**`source_row` is the spreadsheet row number, not the array index.**
+`split_dataset.py:154` writes `np.arange(2, n+2)`, counting the header as row 1,
+and the split workbooks are the authority on that convention, so the cache
+follows it: `SOURCE_ROW_OFFSET = 2`. Import the constant; never assume
+`source_row` is 0-based. Getting it wrong misaligns 99.9% of rows while leaving
+every array shape and every assertion here intact.
 
 ### Slot layout (43 positions)
 
@@ -45,7 +52,7 @@ ablation needs no index edits.
 ```
 rasmussen_et_al_dataset.xlsx  (28166 x [allele, peptide, thalf_hours, hla_seq, hla_pseudoseq])
          |
-         |  load_rows()        + source_row = 0..n-1 ; assert all |hla_seq|=182, |peptide|=9
+         |  load_rows()        + source_row = 2..n+1 ; assert all |hla_seq|=182, |peptide|=9
          v
    ASSERT 1  assert_pseudoseq_indices()      <-- before any compute is spent
          |   hla_seq[PSEUDOSEQ_INDICES] == hla_pseudoseq, all 75 alleles

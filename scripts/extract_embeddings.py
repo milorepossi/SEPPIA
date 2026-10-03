@@ -4,9 +4,9 @@
 One forward pass per dataset row over the concatenation hla_seq + LINKER +
 peptide, keeping 43 of the 191 residue positions from each of several layer
 depths. The cache is split-agnostic: row i of every array corresponds to
-entry i of index.json["pairs"] and to source_row i, so a single extraction
-serves every train/test split and every arm of the experiment. Nothing is
-ever keyed by split.
+entry i of index.json["pairs"] and to source_row i + SOURCE_ROW_OFFSET, so a
+single extraction serves every train/test split and every arm of the
+experiment. Nothing is ever keyed by split.
 
 Example:
     python scripts/extract_embeddings.py rasmussen_et_al_dataset.xlsx \
@@ -68,6 +68,15 @@ CHECKPOINT_EVERY = 2000
 HLA_COLUMN = "hla_seq"
 PEPTIDE_COLUMN = "peptide"
 PSEUDOSEQ_COLUMN = "hla_pseudoseq"
+
+# source_row numbering follows split_dataset.py, which writes
+# np.arange(2, n+2): the spreadsheet row of the record, counting the header as
+# row 1. The split workbooks are the authority on this, so array index i holds
+# source_row i + SOURCE_ROW_OFFSET and a split's rows map to cache positions by
+# subtracting it. Import this rather than writing 2, and never assume
+# source_row is a 0-based index: getting it wrong misaligns 99.9% of rows while
+# leaving every array shape and every assertion in this file intact.
+SOURCE_ROW_OFFSET = 2
 
 
 # --- Position bookkeeping ----------------------------------------------------
@@ -165,15 +174,19 @@ def load_rows(dataset_path, limit=None, sheet=0):
     """Read the dataset and return (frame, rows) with a source_row column.
 
     source_row is the row's position in the input file, which is what a split's
-    rows are joined on at training time. Taking a --limit keeps the first N
-    rows, so source_row stays equal to the array index.
+    rows are joined on at training time. It follows split_dataset.py, which is
+    the authority on the convention: numbering starts at SOURCE_ROW_OFFSET, so
+    it is the spreadsheet row number rather than the array index. Taking a
+    --limit keeps the first N rows, so array index i always holds
+    source_row i + SOURCE_ROW_OFFSET.
     """
     frame = pd.read_excel(dataset_path, sheet_name=sheet)
     for column in (HLA_COLUMN, PEPTIDE_COLUMN, PSEUDOSEQ_COLUMN):
         if column not in frame.columns:
             raise ValueError(f"dataset is missing column {column!r}")
     frame = frame.reset_index(drop=True)
-    frame["source_row"] = np.arange(len(frame), dtype=np.int64)
+    frame["source_row"] = np.arange(
+        SOURCE_ROW_OFFSET, len(frame) + SOURCE_ROW_OFFSET, dtype=np.int64)
 
     lengths = frame[HLA_COLUMN].str.len().unique()
     assert set(lengths) == {HLA_LEN}, f"expected all hla_seq to be {HLA_LEN} aa, saw {sorted(lengths)}"

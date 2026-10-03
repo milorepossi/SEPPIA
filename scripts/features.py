@@ -15,8 +15,9 @@ to describe the same positions of the same rows in the same order:
     slots  9..42  HLA pseudosequence (PSEUDOSEQ_INDICES)
 
 Like the embedding cache this is split-agnostic: row i corresponds to
-index.json["pairs"][i] and to source_row i, and a split selects its rows by
-joining on source_row. The file is written into the same directory as the
+index.json["pairs"][i] and to source_row i + SOURCE_ROW_OFFSET, and a split
+selects its rows by joining on source_row, the spreadsheet-row convention
+split_dataset.py defines. The file is written into the same directory as the
 embedding arrays and shares their index.json, which is verified to agree
 (or written, if extraction has not run yet).
 
