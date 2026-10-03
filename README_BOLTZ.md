@@ -2,10 +2,16 @@
 
 Fork of [milorepossi/peptide-HLA-stability](https://github.com/milorepossi/peptide-HLA-stability),
 branch `boltz2-arm`. Adds a Boltz-2 trunk-embedding arm to the existing A0-A3
-ladder and runs on **Hugging Face Jobs** rather than Slurm or Modal.
+ladder, with runners for both **Modal** (current, $150) and **Hugging Face
+Jobs** (earlier, $20).
 
-Start here: **[`BENCHMARK.md`](BENCHMARK.md)** for measured cost and what $20
-buys. **[`docs/04_boltz2_arm.md`](docs/04_boltz2_arm.md)** for the method.
+Start here:
+
+| Document | What it covers |
+|---|---|
+| **[`MODAL_BENCHMARK.md`](MODAL_BENCHMARK.md)** | best GPU, nine-card cost sweep, fine-tuning feasibility — **read first** |
+| [`BENCHMARK.md`](BENCHMARK.md) | the earlier Hugging Face measurement on a $20 budget |
+| [`docs/04_boltz2_arm.md`](docs/04_boltz2_arm.md) | the method, assertions and failure modes |
 
 ## The claim being tested
 
@@ -36,7 +42,40 @@ python train_mlp.py --arm BZZ --embeddings-dir <boltz cache> --pooling pca:20
 
 ## Measured cost
 
-L4 (`l4x1`, $0.80/h), 191 tokens per complex, `--no_kernels`:
+### Modal, nine cards, ranked by $/complex (not speed)
+
+| GPU | s/complex | conc | $/complex | Full 28,166 |
+|---|---:|---:|---:|---:|
+| **L4** | 6.14 | 4 | **$0.001364** | **$38.41** |
+| A10G | 4.75 | 4 | $0.001455 | $40.97 |
+| L40S | 3.01 | 4 | $0.001630 | $45.92 |
+| H100 | 2.03 | 8 | $0.002229 | $62.78 |
+| B200 | 1.80 | 8 | $0.003128 | $88.11 |
+| T4 | 26.37 | 1 | $0.004325 | $121.81 |
+
+**L4, concurrency 4-6, sharded.** The big cards are faster but cost more per
+complex, and Modal fans out, so wall clock is bought with shards. T4 is the
+trap: cheapest per hour, dearest per complex.
+
+With $150 the **full dataset is affordable** at ~$38, so the pilot is no longer
+a budget necessity — only a way to get an answer sooner.
+
+### Fine-tuning is feasible
+
+The 48-block Pairformer OOMs on a 22 GiB L4 without activation checkpointing
+and needs 2.37 GiB with it. Counting Boltz's 3 recycles:
+
+| Scope | GPU | 10 epochs, full set |
+|---|---|---:|
+| last 4 blocks, 12.3M params | L4 | **~$19** |
+| all 48 blocks, 147M params | L4 | ~$274 (pilot only, ~$27) |
+
+The binding constraint is statistical: 147M parameters against 28,166 labels
+over 75 alleles will overfit whatever it costs.
+
+### Earlier Hugging Face measurement
+
+L4 (`l4x1`, $0.80/h), single process, `--no_kernels`:
 
 | Condition | s/complex |
 |---|---:|
