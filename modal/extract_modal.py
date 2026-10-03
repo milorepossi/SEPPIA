@@ -34,6 +34,7 @@ image = (
     .env({"BOLTZ_CACHE": "/cache/boltz"})
     .add_local_file(REPO / "scripts" / "extract_boltz.py", "/app/extract_boltz.py")
     .add_local_file(REPO / "scripts" / "extract_embeddings.py", "/app/extract_embeddings.py")
+    .add_local_file(REPO / "scripts" / "merge_shards.py", "/app/merge_shards.py")
     .add_local_file(REPO / "DATA" / "rasmussen_clean.csv", "/app/rasmussen_clean.csv")
 )
 
@@ -46,7 +47,8 @@ cache = modal.Volume.from_name("boltz-pmhc-cache", create_if_missing=True)
 def extract_shard(shard: int, n_shards: int, source_rows: list[int],
                   out_root: str, batch_size: int = 256,
                   sampling_steps: int = 10, recycling_steps: int = 3,
-                  max_seconds: float | None = None) -> dict:
+                  max_seconds: float | None = None) -> str:
+    import json
     import sys
     import time
 
@@ -74,61 +76,22 @@ def extract_shard(shard: int, n_shards: int, source_rows: list[int],
 
     summary |= {"shard": shard, "n_assigned": len(mine),
                 "elapsed_seconds": round(time.monotonic() - started, 1)}
-    return {k: v for k, v in summary.items() if k != "batches"}
+    return json.dumps({k: v for k, v in summary.items() if k != "batches"})
 
 
 @app.function(volumes={"/cache": cache}, timeout=3600)
-def merge_shards(out_root: str, dest: str) -> dict:
-    """Concatenate shard caches into one cache ordered by source_row.
+def merge_shards(out_root: str, dest: str) -> str:
+    """Reassemble shard caches. Logic lives in scripts/merge_shards.py so it is
+    testable locally with synthetic shards rather than on a paid run."""
+    import json
+    import sys
 
-    Shards were assigned by stride, so the merged order is restored by sorting
-    on source_row -- which is also the key `arm_features.row_positions` joins a
-    split on, so the merged cache is a drop-in for the ladder.
-    """
-    import numpy as np
+    sys.path.insert(0, "/app")
+    import merge_shards as ms
 
-    root = pathlib.Path(out_root)
-    shards = sorted(p for p in root.glob("shard_*") if (p / "index.json").exists())
-    if not shards:
-        raise FileNotFoundError(f"no completed shards under {out_root}")
-
-    indices = [json.loads((p / "index.json").read_text()) for p in shards]
-    names = list(indices[0]["arrays"])
-    rows: list[tuple[int, int, int]] = []          # (source_row, shard_i, position)
-    pairs: dict[int, list] = {}
-    for si, idx in enumerate(indices):
-        done = json.loads((shards[si] / "progress.json").read_text())["rows_done"]
-        for pos, sr in enumerate(idx["source_row"][:done]):
-            rows.append((int(sr), si, pos))
-            pairs[int(sr)] = idx["pairs"][pos]
-    rows.sort()
-
-    dest_dir = pathlib.Path(dest)
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    opened = [{n: np.load(p / n, mmap_mode="r") for n in names} for p in shards]
-    out = {}
-    for n in names:
-        dim = opened[0][n].shape[-1]
-        out[n] = np.lib.format.open_memmap(
-            dest_dir / n, mode="w+", dtype=np.float16,
-            shape=(len(rows), indices[0]["n_slots"], dim))
-    for k, (_sr, si, pos) in enumerate(rows):
-        for n in names:
-            out[n][k] = opened[si][n][pos]
-    for n in names:
-        out[n].flush()
-
-    merged = dict(indices[0])
-    merged |= {"n_rows": len(rows),
-               "source_row": [sr for sr, _, _ in rows],
-               "pairs": [pairs[sr] for sr, _, _ in rows],
-               "merged_from": [p.name for p in shards]}
-    (dest_dir / "index.json").write_text(json.dumps(merged, indent=2) + "\n")
-    (dest_dir / "progress.json").write_text(
-        json.dumps({"rows_done": len(rows), "fingerprint": merged["fingerprint"]}) + "\n")
+    summary = ms.merge(out_root, dest)
     cache.commit()
-    return {"merged_rows": len(rows), "shards": len(shards), "dest": dest,
-            "arrays": {n: list(out[n].shape) for n in names}}
+    return json.dumps(summary)
 
 
 @app.local_entrypoint()
@@ -143,7 +106,8 @@ def run(rows: str = "DATA/pilot_source_rows.json", shards: int = 8,
     args = [(s, shards, source_rows, out_root, batch_size, 10, 3,
              max_seconds or None) for s in range(shards)]
     total_gpu_seconds = 0.0
-    for res in extract_shard.starmap(args):
+    for raw in extract_shard.starmap(args):
+        res = json.loads(raw)
         total_gpu_seconds += res.get("elapsed_seconds", 0.0)
         print(json.dumps(res), flush=True)
 
@@ -158,4 +122,4 @@ def run(rows: str = "DATA/pilot_source_rows.json", shards: int = 8,
 @app.local_entrypoint()
 def merge(out_root: str = "/cache/boltz_pilot_shards",
           dest: str = "/cache/boltz_pilot"):
-    print(json.dumps(merge_shards.remote(out_root, dest), indent=2))
+    print(json.dumps(json.loads(merge_shards.remote(out_root, dest)), indent=2))

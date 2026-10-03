@@ -65,18 +65,18 @@ VOLUMES = {"/cache": cache}
 def _gpu_facts() -> dict:
     import torch
 
-    out = {"torch": torch.__version__, "cuda": torch.cuda.is_available()}
+    out = {"torch": str(torch.__version__), "cuda": bool(torch.cuda.is_available())}
     if not torch.cuda.is_available():
         return out
     props = torch.cuda.get_device_properties(0)
     cap = torch.cuda.get_device_capability(0)
     out |= {
-        "device": props.name,
+        "device": str(props.name),
         "memory_GiB": round(props.total_memory / 1024**3, 1),
         "capability": f"{cap[0]}.{cap[1]}",
         "sm80_plus": cap[0] >= 8,
         "bf16": bool(torch.cuda.is_bf16_supported()),
-        "sms": props.multi_processor_count,
+        "sms": int(props.multi_processor_count),
     }
     try:
         import cuequivariance_torch  # noqa: F401
@@ -263,47 +263,47 @@ def _bench_body(gpu: str, n: int, concurrencies: list[int], warm: bool) -> dict:
 # Explicit per-GPU functions: Modal resolves the gpu= at decoration time.
 @_make("L4")
 def bench_l4(n: int = 8, concurrencies: list[int] = [1, 2, 4]):
-    return _bench_body("L4", n, concurrencies, True)
+    return json.dumps(_bench_body("L4", n, concurrencies, True))
 
 
 @_make("A10G")
 def bench_a10g(n: int = 8, concurrencies: list[int] = [1, 2, 4]):
-    return _bench_body("A10G", n, concurrencies, True)
+    return json.dumps(_bench_body("A10G", n, concurrencies, True))
 
 
 @_make("L40S")
 def bench_l40s(n: int = 8, concurrencies: list[int] = [1, 2, 4]):
-    return _bench_body("L40S", n, concurrencies, True)
+    return json.dumps(_bench_body("L40S", n, concurrencies, True))
 
 
 @_make("A100-40GB")
 def bench_a100_40(n: int = 8, concurrencies: list[int] = [1, 2, 4]):
-    return _bench_body("A100-40GB", n, concurrencies, True)
+    return json.dumps(_bench_body("A100-40GB", n, concurrencies, True))
 
 
 @_make("A100-80GB")
 def bench_a100_80(n: int = 8, concurrencies: list[int] = [1, 2, 4]):
-    return _bench_body("A100-80GB", n, concurrencies, True)
+    return json.dumps(_bench_body("A100-80GB", n, concurrencies, True))
 
 
 @_make("H100")
 def bench_h100(n: int = 8, concurrencies: list[int] = [1, 2, 4, 8]):
-    return _bench_body("H100", n, concurrencies, True)
+    return json.dumps(_bench_body("H100", n, concurrencies, True))
 
 
 @_make("H200")
 def bench_h200(n: int = 8, concurrencies: list[int] = [1, 2, 4, 8]):
-    return _bench_body("H200", n, concurrencies, True)
+    return json.dumps(_bench_body("H200", n, concurrencies, True))
 
 
 @_make("B200")
 def bench_b200(n: int = 8, concurrencies: list[int] = [1, 2, 4, 8]):
-    return _bench_body("B200", n, concurrencies, True)
+    return json.dumps(_bench_body("B200", n, concurrencies, True))
 
 
 @_make("T4")
 def bench_t4(n: int = 4, concurrencies: list[int] = [1]):
-    return _bench_body("T4", n, concurrencies, True)
+    return json.dumps(_bench_body("T4", n, concurrencies, True))
 
 
 FUNCS = {
@@ -342,14 +342,23 @@ def _finetune_body(gpu: str, blocks_list: list[int]) -> dict:
 
     dev = torch.device("cuda")
     token_s, token_z = 384, 128
-    for n_blocks in blocks_list:
-        try:
-            module = PairformerModule(token_s, token_z, num_blocks=n_blocks).to(dev)
-        except TypeError:
-            module = PairformerModule(token_s, token_z, n_blocks).to(dev)
-        probe = {"blocks": n_blocks,
+    # Boltz-2's trunk is 48 blocks, 16 heads, dropout 0.25, and it trains with
+    # activation checkpointing ON (scripts/train/configs/structure.yaml). Both
+    # memory modes are probed: checkpointing trades roughly a third more
+    # compute for a large memory saving, and which one fits decides whether a
+    # full-trunk fine-tune is possible at all.
+    combos = [(n, ckpt) for n in blocks_list for ckpt in (False, True)]
+    for n_blocks, ckpt in combos:
+        # v2=True is required: PairformerModule defaults to v2=False, which
+        # builds the v1 attention and then fails with an unexpected 'k_in'
+        # keyword. Boltz-2's checkpoint sets it through pairformer_args.
+        module = PairformerModule(token_s, token_z, num_blocks=n_blocks,
+                                  num_heads=16, dropout=0.25,
+                                  activation_checkpointing=ckpt, v2=True).to(dev)
+        module.train()
+        probe = {"blocks": n_blocks, "activation_checkpointing": ckpt,
                  "trainable_params_M": round(
-                     sum(p.numel() for p in module.parameters()) / 1e6, 2)}
+                     sum(q.numel() for q in module.parameters()) / 1e6, 2)}
 
         s = torch.randn(1, N_TOKENS, token_s, device=dev)
         z = torch.randn(1, N_TOKENS, N_TOKENS, token_z, device=dev)
@@ -389,6 +398,7 @@ def _finetune_body(gpu: str, blocks_list: list[int]) -> dict:
                 probe[f"epoch_{label}_usd"] = round(hours * PRICES[gpu] * 3600, 2)
         except torch.cuda.OutOfMemoryError:
             probe["oom"] = True
+            torch.cuda.empty_cache()
         except Exception as exc:
             probe["error"] = f"{type(exc).__name__}: {exc}"
         report["probes"].append(probe)
@@ -397,24 +407,24 @@ def _finetune_body(gpu: str, blocks_list: list[int]) -> dict:
     return report
 
 
-@app.function(gpu="A100-80GB", volumes=VOLUMES, timeout=1800, name="ft_a100_80")
-def ft_a100_80(blocks: list[int] = [1, 2, 4, 8, 48]):
-    return _finetune_body("A100-80GB", blocks)
+@app.function(gpu="A100-80GB", volumes=VOLUMES, timeout=2400, name="ft_a100_80")
+def ft_a100_80(blocks: list[int] = [1, 4, 48]):
+    return json.dumps(_finetune_body("A100-80GB", blocks))
 
 
-@app.function(gpu="H100", volumes=VOLUMES, timeout=1800, name="ft_h100")
-def ft_h100(blocks: list[int] = [1, 2, 4, 8, 48]):
-    return _finetune_body("H100", blocks)
+@app.function(gpu="H100", volumes=VOLUMES, timeout=2400, name="ft_h100")
+def ft_h100(blocks: list[int] = [1, 4, 48]):
+    return json.dumps(_finetune_body("H100", blocks))
 
 
-@app.function(gpu="L4", volumes=VOLUMES, timeout=1800, name="ft_l4")
-def ft_l4(blocks: list[int] = [1, 2, 4, 8]):
-    return _finetune_body("L4", blocks)
+@app.function(gpu="L4", volumes=VOLUMES, timeout=2400, name="ft_l4")
+def ft_l4(blocks: list[int] = [1, 4, 48]):
+    return json.dumps(_finetune_body("L4", blocks))
 
 
-@app.function(gpu="B200", volumes=VOLUMES, timeout=1800, name="ft_b200")
-def ft_b200(blocks: list[int] = [1, 2, 4, 8, 48]):
-    return _finetune_body("B200", blocks)
+@app.function(gpu="B200", volumes=VOLUMES, timeout=2400, name="ft_b200")
+def ft_b200(blocks: list[int] = [1, 4, 48]):
+    return json.dumps(_finetune_body("B200", blocks))
 
 
 # --------------------------------------------------------------------------- #
@@ -424,7 +434,7 @@ def ft_b200(blocks: list[int] = [1, 2, 4, 8, 48]):
 def probe(gpus: str = "L4,H100"):
     """Cheap identity + kernel-availability check before spending on a sweep."""
     for gpu in [g.strip() for g in gpus.split(",") if g.strip()]:
-        out = FUNCS[gpu].remote(n=2, concurrencies=[1])
+        out = json.loads(FUNCS[gpu].remote(n=2, concurrencies=[1]))
         print(json.dumps({k: out[k] for k in ("gpu", "facts", "kernels_used", "warmup")
                           if k in out}, indent=2), flush=True)
 
@@ -437,7 +447,7 @@ def sweep(gpus: str = "", n: int = 8, out: str = "modal/sweep_results.json"):
     results = {}
     for g, h in handles.items():
         try:
-            results[g] = h.get()
+            results[g] = json.loads(h.get())
         except Exception as exc:
             results[g] = {"gpu": g, "fatal": f"{type(exc).__name__}: {exc}"}
         print(f"--- {g} ---", flush=True)
@@ -466,7 +476,7 @@ def finetune(gpus: str = "L4,A100-80GB,H100", out: str = "modal/finetune_results
     results = {}
     for g, h in handles.items():
         try:
-            results[g] = h.get()
+            results[g] = json.loads(h.get())
         except Exception as exc:
             results[g] = {"gpu": g, "fatal": f"{type(exc).__name__}: {exc}"}
         print(f"--- {g} ---", flush=True)
