@@ -169,10 +169,14 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
     # validation rows it early-stops on and never the test set.
     encoder = None
     explained_variance = None
+    cache_model, cache_dim = None, None
     if arm != arm_features.ONEHOT_ARM:
         encoder = arm_features.CachedArmEncoder(embeddings_dir, arm, pooling)
         encoder.fit({key: value[train_idx] for key, value in train_raw.items()})
         explained_variance = encoder.explained_variance
+        # Recorded and printed because a cache built with the 8M development
+        # model would otherwise work silently at d=320 instead of d=1280.
+        cache_model, cache_dim = encoder.index.get('model'), encoder.dim
 
     x_all, y_all, _ = features_and_target(train_raw, epsilon, encoder=encoder)
     x_test, y_test, _ = features_and_target(test_raw, epsilon, encoder=encoder)
@@ -250,6 +254,7 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
     return dict(split_index=split_index, arm=arm, pooling=pooling,
                 standardised=standardiser is not None,
                 explained_variance=explained_variance,
+                cache_model=cache_model, cache_dim=cache_dim,
                 train_rows=int(len(x_train)), validation_rows=int(len(x_validation)),
                 test_rows=int(len(x_test)), features=int(x_train.shape[1]),
                 target_center=center, target_scale=scale,
@@ -446,7 +451,9 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
                             target_scale=result['target_scale'], epsilon=epsilon,
                             arm=arm, pooling=pooling),
                        out/f'mlp_split_{index}.pt')
-        print(f"[{arm}] split {index}: {result['features']} features  "
+        print(f"[{arm}] split {index}: {result['features']} features"
+              + (f" from {result['cache_model']} d={result['cache_dim']}"
+                 if result['cache_model'] else '') + '  '
               f"best epoch {result['best_epoch']}/{result['epochs_run']}  "
               f"test RMSE {result['test']['rmse']:.3f}  "
               f"Spearman {result['test']['spearman']:.3f}  "
@@ -461,7 +468,9 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
                            standardised=results[0]['standardised'],
                            embeddings_dir=(None if arm == arm_features.ONEHOT_ARM
                                            else str(Path(embeddings_dir).resolve())),
-                           explained_variance=results[0]['explained_variance']),
+                           explained_variance=results[0]['explained_variance'],
+                           cache_model=results[0]['cache_model'],
+                           cache_dim=results[0]['cache_dim']),
                   encoding=dict(alphabet=AMINO_ACIDS, peptide_length=9,
                                 pseudoseq_length=34, features=results[0]['features'],
                                 scheme=(onehot_scheme if arm == arm_features.ONEHOT_ARM

@@ -105,6 +105,44 @@ def assert_round_trip(array, rows, peptide_slots, pseudoseq_slots):
     return len(rows)
 
 
+def repair_index(out_dir, rows, pseudoseq_indices=PSEUDOSEQ_INDICES, linker=LINKER):
+    """Rewrite an existing index.json's source_row to the current convention.
+
+    For a cache extracted before source_row followed split_dataset.py. The .npy
+    arrays stay valid because row order never changed, so only the labels need
+    replacing -- and only source_row is touched, so the recorded model, layer
+    list and slot layout survive. Deleting and rebuilding the index instead
+    would lose the model name, since this module only knows about its own arm.
+    """
+    out_dir = Path(out_dir)
+    path = out_dir/"index.json"
+    if not path.exists():
+        raise FileNotFoundError(f"{path} does not exist; nothing to repair")
+    index = json.loads(path.read_text())
+
+    if index["n_rows"] != len(rows):
+        raise ValueError(
+            f"{path} describes {index['n_rows']} rows but the dataset has {len(rows)}. "
+            "Repair needs the same rows the cache was extracted over "
+            "(match --limit).")
+    expected_pairs = [[row[HLA_COLUMN], row[PEPTIDE_COLUMN]] for row in rows]
+    if index["pairs"] != expected_pairs:
+        raise ValueError(
+            f"{path} pairs do not match this dataset in this order, so the "
+            "arrays are not a cache of these rows. Refusing to repair; re-extract.")
+
+    before = index["source_row"][:1]
+    index["source_row"] = [int(row["source_row"]) for row in rows]
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(index))
+    temporary.replace(path)
+    print(f"repaired {path}: source_row now starts at {index['source_row'][0]} "
+          f"(was {before[0] if before else 'empty'}); model "
+          f"{index.get('model')!r} and layers {index.get('layers')} preserved",
+          flush=True)
+    return index
+
+
 def check_index_agrees(out_dir, rows, n_slots):
     """If the ESM-2 cache already wrote index.json, A0 must match it exactly."""
     path = Path(out_dir) / "index.json"
@@ -245,7 +283,18 @@ def main():
     parser.add_argument("--no-check-layer0", dest="check_layer0",
                         action="store_false",
                         help="Skip the cross-check against concat_L0.npy")
+    parser.add_argument("--repair-index", action="store_true",
+                        help="Rewrite an existing index.json's source_row to the "
+                             "current convention and exit. For a cache extracted "
+                             "before source_row followed split_dataset.py; the .npy "
+                             "arrays are left alone and the recorded model and layer "
+                             "list are preserved.")
     args = parser.parse_args()
+
+    if args.repair_index:
+        _, rows = load_rows(args.dataset, limit=args.limit)
+        repair_index(args.out_dir, rows, linker=args.linker)
+        return
 
     summary = build_onehot(dataset_path=args.dataset, out_dir=args.out_dir,
                            limit=args.limit, linker=args.linker,

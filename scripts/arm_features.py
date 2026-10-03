@@ -152,7 +152,21 @@ def row_positions(index, source_rows):
     arithmetic shortcut agrees. A silent offset error here would misalign
     almost every row while leaving all shapes intact, so it is worth asserting.
     """
-    lookup = {int(s): i for i, s in enumerate(index["source_row"])}
+    cached = np.asarray(index["source_row"], dtype=np.int64)
+    # Check the convention before the per-row lookup, so a cache written with
+    # the old 0-based numbering gets told what is wrong and how to fix it
+    # instead of a misleading "rows are missing".
+    if len(cached) and cached[0] != SOURCE_ROW_OFFSET:
+        raise ValueError(
+            f"index.json numbers source_row from {cached[0]}, but split_dataset.py "
+            f"numbers from {SOURCE_ROW_OFFSET} (the spreadsheet row). This cache's "
+            "index.json predates that fix.\n"
+            "  The .npy arrays are fine: row order never changed, only the labels. "
+            "Repair the index in place, without re-extracting:\n"
+            "    python scripts/features.py <dataset.xlsx> "
+            "--out-dir <embeddings-dir> --repair-index")
+
+    lookup = {int(s): i for i, s in enumerate(cached)}
     missing = [int(s) for s in source_rows if int(s) not in lookup]
     if missing:
         raise KeyError(
