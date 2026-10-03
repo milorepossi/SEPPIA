@@ -16,9 +16,15 @@ Raw results: `modal/sweep_results.json`, `modal/refine_results.json`,
 
 ## 1. Verdict
 
-**Use L4 at concurrency 4-6, sharded across containers.** Full 28,166-complex
-extraction lands at roughly $38 against a $150 budget, leaving ample room for
-fine-tuning experiments.
+**Use L4 at concurrency 4, across 8 shards.** All 28,166 complexes in **6.0
+hours of wall clock for $38.39**, which fits an overnight window with hours to
+spare. Confirmed: 8 concurrent L4 containers start within 2.3 s of each other
+and run with full parallelism (`modal/capacity_test.py`).
+
+Wall clock and cost are separable. Sharding splits the work across containers,
+each on its own GPU, so S shards finish S times sooner for the same GPU-seconds
+— the GPU choice sets the price, the shard count sets the clock. Timing table
+and the overnight plan are in [`docs/05_finetune.md`](docs/05_finetune.md).
 
 Two things changed versus the earlier Hugging Face run. The cuEquivariance
 triangle kernels **install cleanly on Modal** and were used on every card,

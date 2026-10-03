@@ -1,0 +1,73 @@
+{
+  "report": {
+    "requested_shards": 8,
+    "containers_returned": 8,
+    "peak_concurrent": 8,
+    "first_start_offset_s": 7.4,
+    "last_start_offset_s": 9.6,
+    "start_spread_s": 2.3,
+    "devices": [
+      "NVIDIA L4"
+    ],
+    "total_wall_s": 49.6,
+    "verdict": "full parallelism"
+  },
+  "rows": [
+    {
+      "shard": 0,
+      "device": "NVIDIA L4",
+      "mem_GiB": 22.0,
+      "start": 1791069080.8636208,
+      "end": 1791069120.8650815
+    },
+    {
+      "shard": 1,
+      "device": "NVIDIA L4",
+      "mem_GiB": 22.0,
+      "start": 1791069080.8915076,
+      "end": 1791069120.893316
+    },
+    {
+      "shard": 2,
+      "device": "NVIDIA L4",
+      "mem_GiB": 22.1,
+      "start": 1791069081.004396,
+      "end": 1791069121.005442
+    },
+    {
+      "shard": 4,
+      "device": "NVIDIA L4",
+      "mem_GiB": 22.0,
+      "start": 1791069081.746587,
+      "end": 1791069121.7480557
+    },
+    {
+      "shard": 3,
+      "device": "NVIDIA L4",
+      "mem_GiB": 22.0,
+      "start": 1791069081.828485,
+      "end": 1791069121.8296628
+    },
+    {
+      "shard": 5,
+      "device": "NVIDIA L4",
+      "mem_GiB": 22.0,
+      "start": 1791069082.551217,
+      "end": 1791069122.5518093
+    },
+    {
+      "shard": 6,
+      "device": "NVIDIA L4",
+      "mem_GiB": 22.0,
+      "start": 1791069082.9648044,
+      "end": 1791069122.9661238
+    },
+    {
+      "shard": 7,
+      "device": "NVIDIA L4",
+      "mem_GiB": 22.0,
+      "start": 1791069083.114722,
+      "end": 1791069123.1163456
+    }
+  ]
+}
