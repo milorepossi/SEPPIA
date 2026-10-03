@@ -336,18 +336,27 @@ def test_error_figure(results, path):
     fig.savefig(path, dpi=180, facecolor=COLORS['surface'])
 
 
+def mean_sd(values):
+    """Mean and sample standard deviation over splits.
+
+    The sample deviation needs two splits, so a single-split run reports None
+    rather than the nan that ddof=1 returns there, which metrics.json cannot
+    hold: it is written with allow_nan=False.
+    """
+    array = np.array(values)
+    return dict(mean=float(array.mean()),
+                sd=float(array.std(ddof=1)) if array.size > 1 else None,
+                values=array.tolist())
+
+
 def summary_table(results):
     """Mean and standard deviation of each test metric over the splits."""
     keys = ('rmse', 'mae', 'bias', 'pearson', 'spearman')
-    table = {}
-    for key in keys:
-        values = np.array([result['test'][key] for result in results])
-        table[key] = dict(mean=float(values.mean()), sd=float(values.std(ddof=1)),
-                          values=values.tolist())
+    table = {key: mean_sd([result['test'][key] for result in results])
+             for key in keys}
     for name in results[0]['test_subsets']:
-        values = np.array([result['test_subsets'][name]['rmse'] for result in results])
-        table[f'rmse_{name}'] = dict(mean=float(values.mean()),
-                                     sd=float(values.std(ddof=1)), values=values.tolist())
+        table[f'rmse_{name}'] = mean_sd(
+            [result['test_subsets'][name]['rmse'] for result in results])
     return table
 
 
