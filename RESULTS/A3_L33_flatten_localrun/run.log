@@ -1,0 +1,43 @@
+[L33] split 0: 55040 features from esm2_t33_650M_UR50D d=1280  best epoch 52/77  test RMSE 1.109  Spearman 0.793  (128.3s)
+[L33] split 1: 55040 features from esm2_t33_650M_UR50D d=1280  best epoch 79/104  test RMSE 1.153  Spearman 0.776  (158.1s)
+[L33] split 2: 55040 features from esm2_t33_650M_UR50D d=1280  best epoch 89/114  test RMSE 1.204  Spearman 0.751  (170.9s)
+[L33] split 3: 55040 features from esm2_t33_650M_UR50D d=1280  best epoch 75/100  test RMSE 1.256  Spearman 0.733  (151.5s)
+[L33] split 4: 55040 features from esm2_t33_650M_UR50D d=1280  best epoch 90/115  test RMSE 1.136  Spearman 0.781  (171.3s)
+{
+  "rmse": {
+    "mean": 1.1717505216598512,
+    "sd": 0.058344792939146066
+  },
+  "mae": {
+    "mean": 0.8778660416603088,
+    "sd": 0.0359188494124095
+  },
+  "bias": {
+    "mean": -0.033325068280100824,
+    "sd": 0.05350482262928752
+  },
+  "pearson": {
+    "mean": 0.767675056536248,
+    "sd": 0.02771940060706918
+  },
+  "spearman": {
+    "mean": 0.7668881349098089,
+    "sd": 0.024638763546116847
+  },
+  "rmse_all": {
+    "mean": 1.1717505216598512,
+    "sd": 0.058344792939146066
+  },
+  "rmse_seen_both": {
+    "mean": 1.0168490171432496,
+    "sd": 0.008833593280767124
+  },
+  "rmse_unseen_peptide": {
+    "mean": 1.2565484762191772,
+    "sd": 0.08206514101149047
+  },
+  "rmse_unseen_hla": {
+    "mean": 1.624520492553711,
+    "sd": 0.18952037103866395
+  }
+}

@@ -7,10 +7,11 @@ __pycache__/
 embeddings/
 *.npy
 
-# Checkpoints from a flatten-pooled PLM arm are ~54 MiB each (a 55040x256
-# first layer), so ~270 MiB for five splits. The small A0 checkpoints in
-# RESULTS/ stay tracked.
-RESULTS/*_flatten/*.pt
+# Per-arm checkpoints: ~1 MiB each for the 860-feature arms but ~54 MiB for a
+# flatten arm (a 55040x256 first layer), so a full ladder is ~300 MiB. The
+# original A0 checkpoints directly in RESULTS/ stay tracked; everything under
+# a per-arm subdirectory is regenerable from slurm/ladder.sbatch.
+RESULTS/*/*.pt
 
 # Derived splits; metadata_*.json is kept so a split can be reproduced
 DATA/split/*.xlsx
