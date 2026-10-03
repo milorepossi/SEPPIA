@@ -25,20 +25,107 @@ it is not the richer per-residue featurizer. The only thing it adds that no
 sequence model can express is its **pair** representation over residue pairs at
 the interface. Arm `BZZ` carries that hypothesis; `BZS` is its control.
 
-## Arms
+## The embedding-regressor, end to end
 
-| Arm | Content | Shape | Role |
+Four stages. Boltz-2 is **frozen** throughout; nothing about it is trained.
+
+```
+  peptide + HLA  ->  Boltz-2 trunk  ->  43-slot cache  ->  pooling  ->  MLP  ->  ln(t½)
+   9aa    182aa      (frozen)           (n,43,D) fp16     (n,F)      256-128-1
+```
+
+### Stage 1 — which embeddings
+
+One `boltz predict --write_embeddings` pass per complex returns the trunk's
+single representation `s` `[191, 384]` and pair representation `z`
+`[191, 191, 128]`, where 191 = 182 HLA residues + 9 peptide residues. We reduce
+each to **43 slots**: the 9 peptide positions plus the 34 NetMHCpan
+contact positions of the groove. Those are the same 43 positions the ESM-2 arms
+use, which is what keeps the ladder comparable.
+
+| Arm | Cache | Shape | What it is |
 |---|---|---|---|
-| `BZS` | trunk single representation | `(n, 43, 384)` | comparable to A3, expected to tie |
-| `BZZ` | interface pair contraction, 1/d² | `(n, 43, 128)` | **the hypothesis** |
-| `BZZU` | same, uniform weights | `(n, 43, 128)` | is distance weighting earning its keep? |
+| `BZS` | `boltz_S.npy` | `(n, 43, 384)` | `s` gathered at the 43 slots |
+| `BZZ` | `boltz_Z.npy` | `(n, 43, 128)` | `z` contracted over the interface, 1/d² weighted |
+| `BZZU` | `boltz_ZU.npy` | `(n, 43, 128)` | same contraction, uniform weights |
 
-All three come from one extraction pass. Caches use the same 43 slots and row
-order as the ESM-2 arms, so `train_mlp.py` is unchanged:
+`BZZ` is the arm that carries the hypothesis. Boltz-2's single representation is
+384-dimensional against ESM-2 650M's 1280, so it is **not** the richer
+per-residue featurizer — `BZS` is really a like-for-like rerun of A3. The pair
+tensor is the only thing here that a sequence model cannot express, because it
+describes residue *pairs* at an interface and is conditioned on the actual
+complex.
+
+The contraction keeps per-position structure rather than pooling it away. For
+peptide slot `p` and contact position `q`, with `d` the Cα-Cα distance from the
+predicted structure:
+
+```
+w[p,q]    = 1 / max(d(p,q), 3.0)²
+zc[p]     = Σ_q w[p,q]·z[p,q] / Σ_q w[p,q]     -> slots 0..8
+zc[9+q]   = Σ_p w[p,q]·z[p,q] / Σ_p w[p,q]     -> slots 9..42
+```
+
+This is PreFold-dG's inverse-square interchain weighting (PMID 42635209), but
+*not* its outer-product pooling. That pooling exists to give variable-length
+complexes a fixed-size vector; ours are always 182+9, and collapsing the peptide
+axis would destroy the P2/P9 anchor signal that dominates class I binding.
+`BZZU` makes "does the distance weighting earn its keep" a one-line ablation
+rather than a second extraction.
+
+### Stage 2 — joining a split to the cache
+
+The cache is **split-agnostic**: row `i` of every array is `source_row` `i`, and
+`index.json` records the mapping. A split selects its rows by joining on
+`source_row`, so one extraction serves all five splits and every arm. Nothing in
+the feature path is aware of splits.
+
+### Stage 3 — pooling 43 × D down to a fixed width
+
+| Pooling | Features | `BZS` | `BZZ` | one-hot |
+|---|---|---:|---:|---:|
+| `flatten` | 43·D | 16,512 | 5,504 | 860 |
+| `mean` | 2·D, peptide and HLA blocks separately | 768 | 256 | 40 |
+| **`pca:20`** | 43·20, one D→20 projection fitted on train rows | **860** | **860** | **860** |
+
+`pca:20` is the headline setting because it makes every arm **860 features**,
+identical to one-hot. The head is then byte-identical across arms and only the
+feature *content* differs, which is the whole point of a ladder. `flatten` is
+reported separately as a *capacity* experiment, not a representation one.
+
+### Stage 4 — the regressor
+
+A plain MLP, deliberately. Anything clever here would confound the comparison.
+
+| | |
+|---|---|
+| Architecture | `F → 256 → 128 → 1`, ReLU, dropout 0.2 |
+| First-layer params at `pca:20` | 220,416 (identical for every arm) |
+| Loss | MSE on the standardised log target |
+| Target | `ln(t½ + 0.1)`; the 0.1 keeps the 20% left-censored zeros only 0.22 sd from the next observed value |
+| Optimiser | Adam, lr 1e-3, weight decay 1e-5, batch 256 |
+| Early stopping | on a 10% validation slice **carved out of train**, never test |
+| Protocol | 5 splits × ≥3 seeds, paired across arms |
+| Metric | Spearman ρ headline, plus Pearson and RMSE in log units |
+
+Everything fitted is fitted on **training rows only**: the PCA projection, the
+feature standardiser, and the target centering. The validation slice used for
+early stopping is held out of all three.
 
 ```bash
 python train_mlp.py --arm BZZ --embeddings-dir <boltz cache> --pooling pca:20
 ```
+
+### Two things to get right before reading any number
+
+**Re-read the target from the clean CSV.** `train_mlp.py` takes `thalf_hours`
+from the split `.npz` files, which inherit the Excel recovery bug: 26 rows
+across 19 distinct values are wrong (a true `1.05` reads as `1.5`). See
+[`docs/04_boltz2_arm.md`](docs/04_boltz2_arm.md) §9.
+
+**Re-score A0 on the same rows.** If the Boltz arms run on a subset, a loss
+against A0's full-data 0.771 says nothing until A0 is re-scored on identical
+rows. That re-scoring is CPU-only and free.
 
 ## Measured cost
 
