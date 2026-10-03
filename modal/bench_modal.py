@@ -508,7 +508,7 @@ def refine(out: str = "modal/refine_results.json"):
 
     # concurrency chosen from peak_device_MiB in the first sweep vs card memory,
     # leaving ~25% headroom
-    plan = {"L4": 6, "A10G": 6, "L40S": 12, "H100": 20, "B200": 32}
+    plan = {"L4": 6, "A10G": 6, "L40S": 12, "H100": 14, "B200": 20}
     n_lo, n_hi = 6, 18
     results = {}
     for gpu, conc in plan.items():
@@ -563,15 +563,19 @@ def refine(out: str = "modal/refine_results.json"):
 # allocation while each boltz worker also spawns `--num_workers 2` dataloader
 # workers. These functions request CPU in proportion to the worker count, to
 # separate a genuine GPU ceiling from CPU starvation.
+# Concurrency ceilings from the measured per-worker footprint at 85% of device
+# memory: L4/A10G 6, A100-40 11, L40S 12, H100 20, A100-80 22, H200 36, B200 44.
+# Asking an L4 for 8 workers needs ~22.4 GiB of a 22.0 GiB card and simply
+# wedges, which is how this test first went wrong.
 @app.function(gpu="L4", cpu=16.0, memory=32768, volumes=VOLUMES, timeout=3600,
               name="bench_l4_cpu")
-def bench_l4_cpu(n: int = 12, concurrencies: list[int] = [4, 8]):
+def bench_l4_cpu(n: int = 12, concurrencies: list[int] = [4, 6]):
     return json.dumps(_bench_body("L4", n, concurrencies, True))
 
 
 @app.function(gpu="H100", cpu=32.0, memory=65536, volumes=VOLUMES, timeout=3600,
               name="bench_h100_cpu")
-def bench_h100_cpu(n: int = 12, concurrencies: list[int] = [8, 16]):
+def bench_h100_cpu(n: int = 12, concurrencies: list[int] = [8, 14]):
     return json.dumps(_bench_body("H100", n, concurrencies, True))
 
 

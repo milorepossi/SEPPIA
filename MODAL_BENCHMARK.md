@@ -155,6 +155,15 @@ Extraction is the cheap half. With sharding, the full extraction is about
 - **The MSA module and input embedder** in the fine-tune step cost.
 - **Concurrency above 8**, and the start-up-free steady-state rate. Both are
   what `refine` measures; its numbers supersede section 2 where they differ.
+- **Concurrency headroom, bounded by arithmetic.** Per-worker footprint is
+  2.8-3.5 GiB, so at 85% of device memory the ceilings are L4 and A10G 6,
+  A100-40GB 11, L40S 12, H100 20, A100-80GB 22, H200 36, B200 44. Every card in
+  section 2 was tested at 4 or 8, well under. Whether throughput keeps scaling
+  to those ceilings is **unmeasured**: two attempts to find out stalled, and the
+  second did so because asking an L4 for 8 workers needs ~22.4 GiB of a 22.0 GiB
+  card. The committed defaults are 4 workers on an L4, which is measured and
+  safe; the upside if higher concurrency scales is a cheaper full run, not a
+  dearer one.
 - **CPU allocation per container.** The `refine` pass at concurrency 6 on an L4
   ran markedly slower than concurrency 4 did in the sweep, which points at CPU
   starvation rather than a GPU limit: six `boltz predict` processes each spawn
