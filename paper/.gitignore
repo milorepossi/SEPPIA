@@ -1,0 +1,10 @@
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.fdb_latexmk
+*.fls
+b[0-9].log
+build.log
+main.pdf
