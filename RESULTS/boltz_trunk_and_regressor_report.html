@@ -182,6 +182,52 @@
     font-size: 10.5pt;
   }
 
+  .fact-badge {
+    background-color: #047857;
+    color: #ffffff;
+    font-size: 7pt;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  .hypo-badge {
+    background-color: #c2410c;
+    color: #ffffff;
+    font-size: 7pt;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  .fact-item {
+    background-color: #f0fdf4;
+    border-left: 3.5px solid #10b981;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border-radius: 0 4px 4px 0;
+    font-size: 9pt;
+  }
+
+  .hypo-item {
+    background-color: #fff7ed;
+    border-left: 3.5px solid #f97316;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border-radius: 0 4px 4px 0;
+    font-size: 9pt;
+  }
+
   .footer {
     margin-top: 25px;
     border-top: 1px solid #e5e7eb;
@@ -404,14 +450,68 @@ The table below compiles test Spearman rank correlation (&rho;) across all model
   <li><strong>Structural Representations Prevent Novel Allele Collapse:</strong> On uncharacterized HLA alleles, sequence models collapse (CNN drops to &rho; = 0.3732). Boltz-2 achieves <strong>&rho; = 0.7853</strong>, retaining <strong>90.9% of its IID performance (+110% over the CNN)</strong>. Co-folded physical geometry provides zero-shot generalization across novel alleles where 1D models fail.</li>
 </ol>
 
-<h2>4. What Information the Trunk Embeddings Provide</h2>
+<h2>4. Why Boltz Outperforms the Baseline: Empirical Facts vs. Biophysical Hypotheses</h2>
+<p>
+To understand the superior performance of the Boltz-2 structural arm over classical and deep sequence baselines, it is critical to distinguish between <strong>directly observed empirical facts</strong> (reproducible measurements from our controlled benchmark) and <strong>biophysical hypotheses</strong> (mechanistic and theoretical deductions).
+</p>
+
+<h3>4.1 Empirical Facts (Directly Measured &amp; Verified)</h3>
+
+<div class="fact-item">
+  <span class="fact-badge">Fact 1</span> <strong>Pair representations are strictly required; single representations collapse.</strong><br>
+  In our paired ladder ablation, the single representation arm (<code>BZS</code>, &rho; &approx; 0.68) performed significantly worse than the simple One-Hot Baseline A0 (&rho; = 0.822) and on par with sequence-only PLMs (ESM-2, &rho; &approx; 0.76). Only when the interchain pair tensor $z$ was provided (<code>BZZU</code>) did performance jump to <strong>&rho; = 0.864</strong>.
+</div>
+
+<div class="fact-item">
+  <span class="fact-badge">Fact 2</span> <strong>Boltz-2 prevents catastrophic performance collapse on uncharacterized alleles.</strong><br>
+  On the Novel Allele split (zero HLA overlap between train and test), the Dual-Tower CNN (PMHCEmbeddingNet) dropped from &rho; = 0.6951 &rarr; 0.3732 (a 46.3% drop), and the One-Hot Baseline A0 dropped from &rho; = 0.8222 &rarr; 0.6532 (a 20.6% drop). Boltz-2 <code>BZZU</code> dropped only from 0.8637 &rarr; 0.7853 (retaining <strong>90.9% of its performance</strong>, outperforming the sequence CNN by <strong>+110%</strong>).
+</div>
+
+<div class="fact-item">
+  <span class="fact-badge">Fact 3</span> <strong>Uniform pair contraction outperforms inverse-square distance filtering.</strong><br>
+  Averaging the interchain pair block uniformly (<code>BZZU</code>, &rho; = 0.836) outperformed 1/d<sup>2</sup> distance weighting (<code>BZZ</code>, &rho; = 0.768) by <strong>+0.068</strong> across all standard splits.
+</div>
+
+<div class="fact-item">
+  <span class="fact-badge">Fact 4</span> <strong>Feature-matched PCA retains the structural gain under an identical parameter budget.</strong><br>
+  When compressed via PCA to 860 inputs (<code>BZZU pca:20</code>), Boltz-2 shares the exact first-layer width and parameter count of Baseline A0 (860 one-hot inputs). It still achieved &rho; = 0.8597 on IID (+0.0375 over A0) and &rho; = 0.7565 on Novel Allele (+0.1033 over A0), proving the advantage is representational, not capacity-driven.
+</div>
+
+<div class="fact-item">
+  <span class="fact-badge">Fact 5</span> <strong>Tree-based partitioning on one-hot features completely fails.</strong><br>
+  One-Hot XGBoost yielded &rho; &approx; 0.03 across all splits, whereas a 2-layer MLP on the identical inputs achieved &rho; = 0.8222, demonstrating that additive continuous projections are mandatory to capture distributed pocket signals.
+</div>
+
+<h3>4.2 Biophysical Hypotheses (Mechanistic &amp; Theoretical Explanations)</h3>
+
+<div class="hypo-item">
+  <span class="hypo-badge">Hypothesis 1</span> <strong>Projection onto Invariant 3D Manifolds Overcomes "Out-of-Vocabulary" Sequence Shifts.</strong><br>
+  <em>Rationale:</em> Sequence baselines view an unseen HLA allele as an unseen permutation of categorical tokens. If a training set lacks a specific allele polymorphism, sequence models must extrapolate across discrete token space. We hypothesize that the Boltz-2 Pairformer projects divergent allele sequences into shared physical 3D contact geometries: if a novel allele introduces a mutation in pocket B that maintains pocket volume and electrostatic potential, its pair embedding $z_{ij}$ occupies the same continuous manifold as known alleles, allowing zero-shot transfer without sequence-level memorization.
+</div>
+
+<div class="hypo-item">
+  <span class="hypo-badge">Hypothesis 2</span> <strong>Triangular Updates Model Cooperative Multipoint Binding.</strong><br>
+  <em>Rationale:</em> Peptide&ndash;HLA binding is non-additive and cooperatively coupled: the seating of anchor P2 dictates the backbone tilt and trajectory across the central cleft, which in turn determines whether anchor P9 can productively engage the F-pocket. We hypothesize that triangular multiplicative updates (<code>z_ij &larr; &Sigma;_k a_ik &odot; b_jk</code>) and triangular pair self-attention propagate these three-body spatial dependencies ($i \leftrightarrow k \leftrightarrow j$), whereas 1D sequence models and single-track representations evaluate residue positions largely independently.
+</div>
+
+<div class="hypo-item">
+  <span class="hypo-badge">Hypothesis 3</span> <strong>Long-Range Electrostatics and Conformational Flexibility Explain the Failure of 1/d<sup>2</sup> Weighting.</strong><br>
+  <em>Rationale:</em> Why does uniform contraction (<code>BZZU</code>) beat 1/d<sup>2</sup> contact weighting (<code>BZZ</code>)? We hypothesize that static ground-state C&alpha; distance weighting over-indexes on rigid direct contacts while penalizing long-range electrostatic fields and secondary-shell water-mediated networks. Furthermore, kinetic dissociation rate ($k_{\text{off}} = 1/t_{1/2}$) is governed by the free energy barrier of the transition state during peptide unbinding; uniform weighting allows the regressor to capture allosteric groove dynamics and breathing modes that dictate this barrier.
+</div>
+
+<div class="hypo-item">
+  <span class="hypo-badge">Hypothesis 4</span> <strong>Structural Foundation Pretraining Internalizes Universal Macromolecular Physics.</strong><br>
+  <em>Rationale:</em> Unlike sequence CNNs trained solely on 20,000 pMHC binding rows, Boltz-2 was pretrained on hundreds of thousands of crystallographic and cryo-EM macromolecular structures. We hypothesize that the trunk has internalized fundamental physical priors&mdash;such as steric excluded volume, side-chain rotamer strain, and main-chain hydrogen bond geometries&mdash;allowing it to act as an implicit thermodynamic energy function.
+</div>
+
+<h2>5. What Information the Trunk Embeddings Provide</h2>
 <ul>
   <li><strong>Pocket Shape Complementarity:</strong> Encodes steric packing between peptide side chains and the hydrophobic B- and F-pockets of the HLA groove without requiring manual rotamer search.</li>
   <li><strong>Conserved Network Hydrogen Bonding:</strong> Captures conserved networks (e.g. Tyr7, Tyr159, and Tyr171 coordinating the peptide N- and C-termini) that anchor the peptide backbone.</li>
   <li><strong>Sequence-Invariant Thermodynamic Coordinates:</strong> Primary sequence mutations that conserve physical shape and electrostatic charge map to invariant pair embeddings $z_{ij}$, enabling robust transfer across novel alleles.</li>
 </ul>
 
-<h2>5. Outlook &amp; Future Directions</h2>
+<h2>6. Outlook &amp; Future Directions</h2>
 <ol>
   <li><strong>End-to-End Trunk LoRA Fine-Tuning:</strong> Apply Low-Rank Adaptation (LoRA) to Pairformer projection layers trained directly against kinetic dissociation loss to adapt structural embeddings specifically for binding kinetics.</li>
   <li><strong>2D Interface Cross-Attention Head:</strong> Replace 1D slot contraction with direct cross-attention over the raw $9 \times 34 = 306$ pair block (<code>boltz_ZRAW.npy</code>) to let the head learn non-linear spatial attention maps.</li>

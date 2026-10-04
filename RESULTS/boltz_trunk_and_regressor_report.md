@@ -172,7 +172,37 @@ The table below compiles test Spearman rank correlation ($\rho$) across all eval
 
 ---
 
-## 4. What Information the Trunk Embeddings Provide
+## 4. Why Boltz Outperforms the Baseline: Empirical Facts vs. Biophysical Hypotheses
+
+To understand the superior performance of the Boltz-2 structural arm over classical and deep sequence baselines, it is critical to distinguish between **directly observed empirical facts** (reproducible measurements from our controlled ladder) and **biophysical hypotheses** (mechanistic and theoretical deductions).
+
+### 4.1 Empirical Facts (Directly Measured & Verified)
+
+1. **Fact 1: Pair representations are strictly required; single representations collapse.**
+   - In our paired ablation, the single representation arm (`BZS`, $\rho \approx 0.68$) performed significantly worse than the simple One-Hot Baseline A0 ($\rho = 0.822$) and on par with sequence-only PLMs (ESM-2, $\rho \approx 0.76$). Only when the interchain pair tensor $z$ was provided (`BZZU`) did performance jump to $\rho = 0.864$.
+2. **Fact 2: Boltz-2 prevents catastrophic performance collapse on uncharacterized alleles.**
+   - On the Novel Allele split (zero HLA overlap between train and test), the Dual-Tower CNN (PMHCEmbeddingNet) dropped from $\rho = 0.6951 \to 0.3732$ (a $46.3\%$ drop), and the One-Hot Baseline A0 dropped from $\rho = 0.8222 \to 0.6532$ (a $20.6\%$ drop). Boltz-2 `BZZU` dropped only from $0.8637 \to 0.7853$ (retaining $90.9\%$ of its performance, outperforming the sequence CNN by $+110\%$).
+3. **Fact 3: Uniform pair contraction outperforms inverse-square distance filtering.**
+   - Averaging the interchain pair block uniformly (`BZZU`, $\rho = 0.836$) outperformed $1/d^2$ distance weighting (`BZZ`, $\rho = 0.768$) by $+0.068$ across all standard splits.
+4. **Fact 4: Feature-matched PCA retains the structural gain under an identical parameter budget.**
+   - When compressed via PCA to 860 inputs (`BZZU pca:20`), Boltz-2 shares the exact first-layer width and parameter count of Baseline A0 (860 one-hot inputs). It still achieved $\rho = 0.8597$ on IID ($+0.0375$ over A0) and $\rho = 0.7565$ on Novel Allele ($+0.1033$ over A0), proving the advantage is representational, not capacity-driven.
+5. **Fact 5: Tree-based partitioning on one-hot features completely fails.**
+   - One-Hot XGBoost yielded $\rho \approx 0.03$ across all splits, whereas a 2-layer MLP on the identical inputs achieved $\rho = 0.8222$, demonstrating that additive continuous projections are mandatory to capture distributed pocket signals.
+
+### 4.2 Biophysical Hypotheses (Mechanistic & Theoretical Explanations)
+
+1. **Hypothesis 1: Projection onto Invariant 3D Manifolds Overcomes "Out-of-Vocabulary" Sequence Shifts.**
+   - *Rationale:* Sequence baselines view an unseen HLA allele as an unseen permutation of categorical tokens. If a training set lacks a specific allele polymorphism, sequence models must extrapolate across discrete token space. We hypothesize that the Boltz-2 Pairformer projects divergent allele sequences into shared physical 3D contact geometries: if a novel allele introduces a mutation in pocket B that maintains pocket volume and electrostatic potential, its pair embedding $z_{ij}$ occupies the same continuous manifold as known alleles, allowing zero-shot transfer without sequence-level memorization.
+2. **Hypothesis 2: Triangular Updates Model Cooperative Multipoint Binding.**
+   - *Rationale:* Peptide–HLA binding is non-additive and cooperatively coupled: the seating of anchor P2 dictates the backbone tilt and trajectory across the central cleft, which in turn determines whether anchor P9 can productively engage the F-pocket. We hypothesize that triangular multiplicative updates ($z_{ij} \leftarrow \sum_k a_{ik} \odot b_{jk}$) and triangular pair self-attention propagate these three-body spatial dependencies ($i \leftrightarrow k \leftrightarrow j$), whereas 1D sequence models and single-track representations ($s_i$) evaluate residue positions largely independently.
+3. **Hypothesis 3: Long-Range Electrostatics and Conformational Flexibility Explain the Failure of $1/d^2$ Weighting.**
+   - *Rationale:* Why does uniform contraction (`BZZU`) beat $1/d^2$ contact weighting (`BZZ`)? We hypothesize that static ground-state $C\alpha$ distance weighting over-indexes on rigid direct contacts while penalizing long-range electrostatic fields and secondary-shell water-mediated networks. Furthermore, kinetic dissociation rate ($k_{\text{off}} = 1/t_{1/2}$) is governed by the free energy barrier of the transition state during peptide unbinding; uniform weighting allows the regressor to capture allosteric groove dynamics and breathing modes that dictate this barrier.
+4. **Hypothesis 4: Structural Foundation Pretraining Internalizes Universal Macromolecular Physics.**
+   - *Rationale:* Unlike sequence CNNs trained solely on 20,000 pMHC binding rows, Boltz-2 was pretrained on hundreds of thousands of crystallographic and cryo-EM macromolecular structures. We hypothesize that the trunk has internalized fundamental physical priors—such as steric excluded volume, side-chain rotamer strain, and main-chain hydrogen bond geometries—allowing it to act as an implicit thermodynamic energy function.
+
+---
+
+## 5. What Information the Trunk Embeddings Provide
 
 1. **Pocket Shape Complementarity:** The pair channels capture geometric cavity fitting (e.g., whether the bulky aromatic ring of Phe/Tyr fits into the hydrophobic F-pocket without steric clash).
 2. **Conserved Electrostatic and Hydrogen-Bond Networks:** Conserved network interactions (such as the conserved triads Tyr7, Tyr159, and Tyr171 locking the peptide termini) are explicitly encoded in the pair tensor.
@@ -180,7 +210,7 @@ The table below compiles test Spearman rank correlation ($\rho$) across all eval
 
 ---
 
-## 5. Outlook & Future Directions
+## 6. Outlook & Future Directions
 
 1. **End-to-End Trunk LoRA Fine-Tuning:** Rather than keeping the Pairformer frozen, applying Low-Rank Adaptation (LoRA) to trunk projection layers trained directly against kinetic dissociation loss would optimize the pair representation specifically for kinetic stability rather than static equilibrium structure.
 2. **2D Interface Cross-Attention Head:** Replacing 1D slot contraction with direct cross-attention over the raw $9 \times 34 = 306$ pair block (`boltz_ZRAW.npy`) would enable the downstream head to learn non-linear spatial attention maps.
@@ -189,3 +219,4 @@ The table below compiles test Spearman rank correlation ($\rho$) across all eval
 ---
 
 *Report compiled from automated evaluation cache `boltz-pmhc-cache` &middot; Branch `boltz2-arm` &middot; SerovaHack 2026*
+
