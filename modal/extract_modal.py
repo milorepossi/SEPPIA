@@ -22,10 +22,22 @@ import modal
 
 HERE = pathlib.Path(__file__).parent
 REPO = HERE.parent
-# From modal/sweep_results.json: L4 is cheapest per complex ($0.001364 at
-# concurrency 4) even though L40S/H100/B200 are 2-3x faster, because Modal
-# fans out and wall clock is bought with shards rather than a bigger card.
-GPU = "L4"
+# L4 is cheapest per complex ($0.001364 at concurrency 4), and that is the right
+# choice when wall clock can be bought with shards. It cannot here: the account
+# is capped at 10 concurrent containers, so past 10 shards there is nothing left
+# to fan out with and the only remaining lever is a faster card.
+#
+# L40S measured 3.01 s/complex against L4's 6.14 in the sweep, so ~2.57 in
+# production terms. That halves the remaining wall clock for about +$6.
+#
+# Switching mid-run is safe and loses nothing: the resume fingerprint covers
+# rows, slots, model, sampling steps, recycling and MSA setting, and NOT the
+# GPU. Relaunching the same shard count on the same out_root picks every shard
+# up from its progress.json.
+GPU = "L40S"
+# Kept at 4, the value actually measured for L40S. It has 44 GiB and 142 SMs so
+# 8-12 would probably be faster, but that is untested and this is a production
+# run -- an untested concurrency that CPU-starves would be slower, not faster.
 WORKERS = 4           # concurrent boltz processes per GPU; ~3 GiB each
 CPU = 4.0 * 2.5       # CPU in proportion to workers: each spawns dataloader
                       # threads, and starving them was measured to cost more

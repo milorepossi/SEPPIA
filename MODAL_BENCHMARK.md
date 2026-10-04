@@ -14,7 +14,52 @@ Raw results: `modal/sweep_results.json`, `modal/refine_results.json`,
 
 ---
 
+## 0. Correction: the sweep's ranking was wrong
+
+**Section 2 ranks L4 cheapest per complex. Production measurement says that is
+an artifact of how the sweep was sized.** Keep the section for the record, but
+use these numbers.
+
+The sweep ran 6 complexes per worker. `boltz predict` spends 50-60 s loading
+its checkpoint before the first complex, and that fixed cost is a *larger
+share* of a fast card's total than a slow one's — so sizing the benchmark small
+systematically penalises fast hardware. Production uses `--batch-size 256`,
+which amortises it away.
+
+| GPU | sweep s/cx | production s/cx | gain | sweep $/cx | **production $/cx** |
+|---|---:|---:|---:|---:|---:|
+| L4 | 6.14 | 5.234 | 1.17x | 0.001363 | 0.001162 |
+| **L40S** | 3.01 | **1.762** | **1.71x** | 0.001631 | **0.000955** |
+
+L40S is **2.97x faster** than L4 in production, not the 2.04x the sweep implied,
+and **18% cheaper per complex**. It dominates on both axes. The conclusion that
+"the big cards cost more per complex, so buy wall clock with shards instead" was
+wrong, and it was wrong because of a benchmarking error on my part, not because
+of anything about the hardware.
+
+Two corollaries:
+
+- **Benchmark at production batch size**, or at minimum report the marginal rate
+  from two sizes. The `refine` entrypoint was written to do exactly this and
+  never completed; had it run, this would have surfaced before the sweep's
+  ranking was written down.
+- H100 and B200 may well be cheaper per complex too, by the same mechanism. Not
+  measured at production batch size, so not claimed.
+
+### The constraint that actually binds: a 10-container account cap
+
+Sharding only buys wall clock up to the account's concurrency limit, which is
+**10 concurrent containers** here. Past 10 shards there is nothing left to fan
+out with and the only remaining lever is a faster card. An L40S probe that
+returned zero containers initially looked like L40S having no stock; it was the
+L4 run holding all 10 slots. Freeing them gave 10 L40S containers immediately.
+
+**Probe a GPU's availability before concluding anything about it**, and size the
+shard count to the cap rather than to a round number.
+
 ## 1. Verdict
+
+*(Superseded by section 0 — L40S is both faster and cheaper in production.)*
 
 **Use L4 at concurrency 4, across 8 shards.** All 28,166 complexes in **6.0
 hours of wall clock for $38.39**, which fits an overnight window with hours to
