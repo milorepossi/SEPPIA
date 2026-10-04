@@ -64,8 +64,9 @@ CACHED_ARMS = {"L0": "concat_L0.npy", "L15": "concat_L15.npy", "L33": "concat_L3
 # of residue pairs, so the pair tensor is the only thing Boltz adds that a
 # sequence model cannot express.
 #   BZP   per-token pLDDT at the 43 slots    (n, 43, 1)    -- zero-training arm
+#   BZSZ  s and z concatenated per slot        (n, 43, 512)  -- built offline
 BOLTZ_ARMS = {"BZS": "boltz_S.npy", "BZZ": "boltz_Z.npy", "BZZU": "boltz_ZU.npy",
-              "BZP": "boltz_PLDDT.npy"}
+              "BZP": "boltz_PLDDT.npy", "BZSZ": "boltz_SZ.npy"}
 CACHED_ARMS |= BOLTZ_ARMS
 
 ONEHOT_ARM = "onehot"
@@ -246,7 +247,8 @@ class CachedArmEncoder:
     the training rows first so nothing is fitted on test data.
     """
 
-    def __init__(self, embeddings_dir, arm, pooling="flatten", verify=True):
+    def __init__(self, embeddings_dir, arm, pooling="flatten", verify=True,
+                 prescale=True):
         self.arm = arm
         self.pooling = pooling
         self.mode, self.components = parse_pooling(pooling)
@@ -258,25 +260,61 @@ class CachedArmEncoder:
         self.projection = None
         self.explained_variance = None
         self.verify = verify
+        # Per-dimension standardisation applied BEFORE pooling, fitted on the
+        # training rows only. The Standardiser runs after pooling, which is too
+        # late for two things:
+        #
+        #   pca is scale-sensitive, so an unscaled block lets whichever
+        #   dimensions happen to have the largest variance monopolise the
+        #   components. For a concatenated arm that is fatal: boltz_S peaks at
+        #   ~1383 and boltz_Z at ~294, so BZSZ without prescaling would be BZS
+        #   with the pair tensor as rounding error.
+        #
+        #   It also fixes the asymmetry docs/01 §8.1 records, where ESM-2
+        #   layer 33 is post-layer-norm (mean abs 0.145) and layer 15 is raw
+        #   (2.344), a 16x gap that made A2-vs-A3 partly a measure of input
+        #   scaling rather than of representation.
+        self.prescale = prescale
+        self.dim_center = None
+        self.dim_scale = None
 
     @property
     def width(self):
         return pooled_width(self.pooling, self.n_slots, self.dim,
                             self.peptide_slots, self.pseudoseq_slots)
 
-    def block(self, dataset):
-        """The (rows, slots, dim) float32 slice this split needs."""
+    def raw_block(self, dataset):
+        """The (rows, slots, dim) float32 slice this split needs, unscaled."""
         positions = row_positions(self.index, dataset["source_row"])
         if self.verify:
             verify_join(self.index, positions, dataset)
         return np.asarray(self.array[positions], dtype=np.float32)
 
+    def block(self, dataset):
+        """raw_block with the fitted per-dimension scaling applied."""
+        values = self.raw_block(dataset)
+        if self.prescale:
+            if self.dim_center is None:
+                raise RuntimeError("fit() the encoder on the training rows first")
+            values = (values - self.dim_center) / self.dim_scale
+        return values
+
     def fit(self, dataset):
-        """Fit the pca projection on these rows only. No-op otherwise."""
-        if self.mode != "pca":
-            return self
-        self.projection, self.explained_variance = fit_projection(
-            self.block(dataset), self.components)
+        """Fit per-dimension scaling, then the pca projection, on these rows only."""
+        raw = self.raw_block(dataset)
+        if self.prescale:
+            flat = raw.reshape(-1, self.dim)
+            self.dim_center = flat.mean(axis=0)
+            scale = flat.std(axis=0)
+            # Constant and near-constant dimensions are left alone rather than
+            # amplified; the pseudosequence positions are highly conserved, so
+            # several dimensions are genuinely flat.
+            self.dim_scale = np.where(scale > 1e-6, scale, 1.0).astype(np.float32)
+            self.dim_center = self.dim_center.astype(np.float32)
+            raw = (raw - self.dim_center) / self.dim_scale
+        if self.mode == "pca":
+            self.projection, self.explained_variance = fit_projection(
+                raw, self.components)
         return self
 
     def __call__(self, dataset):

@@ -321,3 +321,84 @@ the magnitudes on real `z` are not yet known.)
 This needs no GPU re-run. `boltz_ZRAW.npy` now caches the raw 9x34 interface
 block, so the distogram head's weights can be applied offline on CPU and any
 nonlinear statistic derived from it afterwards.
+
+## 8. The combined arm `BZSZ`, and the scale trap it exposed
+
+### Why combine at all
+
+PreFold-dG does not score its tensors separately. It projects each pooled
+embedding to a common width, applies batchnorm, a nonlinearity and dropout,
+then **averages** the three into one aggregated vector before a two-layer MLP.
+Scoring `BZS` and `BZZ` as isolated arms answers "is either sufficient on its
+own", which is not the question their result bears on.
+
+The two are plausibly complementary rather than redundant:
+
+| | `BZS` | `BZZ` |
+|---|---|---|
+| What it carries | per-position residue identity and trunk context | interface pair structure |
+| Width per slot | 384 | 128 |
+| Closest existing arm | A3 ESM-2 layer 33 | nothing — no sequence model has this |
+| Weakness | no pair channel at all | contraction averages over 34 groove positions, which can wash out the peptide residue's own identity |
+
+Note `z` is not pure geometry: it is initialised from outer sums of
+`s_inputs`, so it already carries residue identity for both members of each
+pair. The concern is not that `BZZ` lacks identity but that averaging over 34
+partners dilutes it, which is precisely the gap a clean per-position `s`
+channel fills.
+
+### Concatenate, don't average
+
+| | Averaging (theirs) | Concatenation (ours) |
+|---|---|---|
+| Head input width | `d`, independent of tensor count | `Σ dᵢ` |
+| Inductive bias | the views must be commensurable | each source weighted independently |
+| Suits | small data — 5,817 rows / 334 complexes | 28,166 rows |
+
+Averaging is the stronger regulariser and makes sense at their scale. We have
+roughly 5x the rows, so the extra parameters are affordable, and letting the
+head weight each source independently is the less presumptuous choice. Both
+arms share the 43-slot layout, so concatenating along the feature axis is well
+defined: each slot becomes 384 + 128 = **512** features, and the pooling
+machinery works unchanged.
+
+Built offline from an existing cache, no GPU:
+
+```bash
+python scripts/build_combined.py <cache dir>     # writes boltz_SZ.npy, arm BZSZ
+```
+
+### The trap: it would have silently been `BZS`
+
+`boltz_S` peaks around 1383 and `boltz_Z` around 294. Concatenating raw and
+fitting PCA lets the larger block monopolise the components. Measured on a
+synthetic cache with that scale gap:
+
+| | share of PCA component mass on the `s` block |
+|---|---:|
+| No prescaling | **100.0%** |
+| With prescaling | 74.8% (its 75% column share) |
+
+Without prescaling the pair tensor is **invisible** — the "combined" arm would
+have reproduced `BZS` and we would have concluded the combination does not
+help. This is the kind of failure that produces a confident wrong answer rather
+than an error.
+
+The fix is per-dimension standardisation of the cache block **before** pooling,
+fitted on the training rows. The existing `Standardiser` runs *after* pooling,
+which is too late for PCA. Now in `CachedArmEncoder(prescale=True)`, covered by
+`scripts/test_combined.py` (10 checks).
+
+### It also fixes a flaw already on the record
+
+`docs/01_embedding_extraction.md` §8.1 records that ESM-2 layer 33 is recorded
+post-`emb_layer_norm_after` (mean abs 0.145) while layer 15 is raw (2.344), a
+16x gap, and warns that "A2 vs A3 partly measures input scaling rather than
+representation quality". Pre-pooling standardisation removes that asymmetry.
+
+**This changes the published A1/A2/A3 numbers.** Prescaling is on by default
+because it is the more correct setting; pass `--no-prescale` to reproduce
+`RESULTS.md` as committed. Re-running the ESM-2 arms with it on is CPU-only and
+free, and worth doing so the whole ladder is scored under one convention —
+especially given §5, which suggests those numbers were already partly an
+artifact of how the arms were compressed.

@@ -148,7 +148,7 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
                     batch_size, learning_rate, weight_decay, dropout, hidden,
                     validation_fraction, device, arm=arm_features.ONEHOT_ARM,
                     embeddings_dir='embeddings', pooling='flatten',
-                    standardise='auto'):
+                    standardise='auto', prescale=True):
     """Train, early-stop and score one split. Return history and metrics."""
     started = time.monotonic()
     train_file = Path(splits_dir)/f'training_{split_index}.npz'
@@ -171,7 +171,8 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
     explained_variance = None
     cache_model, cache_dim = None, None
     if arm != arm_features.ONEHOT_ARM:
-        encoder = arm_features.CachedArmEncoder(embeddings_dir, arm, pooling)
+        encoder = arm_features.CachedArmEncoder(embeddings_dir, arm, pooling,
+                                                prescale=prescale)
         encoder.fit({key: value[train_idx] for key, value in train_raw.items()})
         explained_variance = encoder.explained_variance
         # Recorded and printed because a cache built with the 8M development
@@ -450,7 +451,8 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
         patience=25, batch_size=256, learning_rate=1e-3, weight_decay=1e-5,
         dropout=0.2, hidden=(256, 128), validation_fraction=0.1, splits=5,
         device=None, save_models=True, arm=arm_features.ONEHOT_ARM,
-        embeddings_dir='embeddings', pooling='flatten', standardise='auto'):
+        embeddings_dir='embeddings', pooling='flatten', standardise='auto',
+        prescale=True):
     """Train one MLP per split, write metrics, figures and optional weights.
 
     arm selects the input representation; everything else is held fixed, so a
@@ -466,7 +468,7 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
             learning_rate=learning_rate, weight_decay=weight_decay, dropout=dropout,
             hidden=tuple(hidden), validation_fraction=validation_fraction, device=device,
             arm=arm, embeddings_dir=embeddings_dir, pooling=pooling,
-            standardise=standardise)
+            standardise=standardise, prescale=prescale)
         # Tensors, so they belong in the checkpoint and not in metrics.json.
         fitted_state = result.pop('fitted_state')
         if save_models:
@@ -553,6 +555,14 @@ def main():
                         help='flatten (43*D features), mean (2*D, over the peptide and '
                              'HLA blocks) or pca:K (43*K, one D->K projection fitted on '
                              'the training rows; pca:20 matches A0 feature for feature)')
+    parser.add_argument('--no-prescale', dest='prescale', action='store_false',
+                        help='Disable per-dimension standardisation of the cache '
+                             'block before pooling. Prescaling is ON by default: '
+                             'it makes pca scale-invariant and is required for the '
+                             'concatenated BZSZ arm, and it removes the ESM-2 '
+                             'layer-norm asymmetry documented in docs/01 8.1. '
+                             'Pass this to reproduce the pre-prescaling numbers '
+                             'in RESULTS.md.')
     parser.add_argument('--standardise', default='auto', choices=('auto', 'always', 'never'),
                         help='Standardise features with training statistics. auto skips '
                              'the already unit-scale one-hot arm and standardises the '
