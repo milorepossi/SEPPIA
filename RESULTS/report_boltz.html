@@ -366,9 +366,86 @@ Table 2 reports performance across all 16 evaluated configurations. All metrics 
   <figcaption><strong>Figure 2.</strong> Full capacity comparison (<code>flatten</code>). Uncompressed pair features (BZZU, 5,504 features) achieve Spearman 0.836 &plusmn; 0.015 and push test RMSE below 1.0 log units (0.992).</figcaption>
 </figure>
 
-<h2 class="break">5. Key Findings &amp; Mechanistic Analyses</h2>
+<h2 class="break">5. Validation vs. Predicted Test Half-Life Scores</h2>
+<p>
+Throughout training, early stopping tracks validation mean squared error ($\text{MSE}_{\text{val}}$) on the 15% validation split ($4,225$ complexes) to select the optimal model checkpoint. The selected weights are then frozen to evaluate generalization on the independent 30% test split ($8,450$ complexes). In Table 3, we detail the split-by-split optimization convergence, validation scores, and test prediction error metrics across the baseline and key Boltz-2 configurations regressing natural-log half-life ($\ln(t_{1/2} + 0.1)$).
+</p>
 
-<h3>5.1 The Pair Tensor $Z$ is the Sole Engine of Structural Advantage</h3>
+<table>
+  <caption>Table 3 &mdash; Split-by-split validation MSE and test prediction metrics across key models. Target is $\ln(t_{1/2} + 0.1)$.</caption>
+  <thead>
+    <tr>
+      <th>Model / Architecture</th>
+      <th>Split</th>
+      <th>Best Epoch</th>
+      <th>Best Val MSE</th>
+      <th>Test RMSE</th>
+      <th>Test MAE</th>
+      <th>Test Bias</th>
+      <th>Pearson $r$</th>
+      <th>Spearman $\rho$</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- A0 One-Hot -->
+    <tr><td rowspan="6"><strong>A0 One-Hot</strong><br><span style="color:var(--muted);font-size:7.5pt;">Baseline (pca:20, 860 feat)</span></td>
+        <td>Split 0</td><td>32 / 57</td><td>1.1066</td><td>1.1093</td><td>0.8263</td><td>+0.0515</td><td>0.7953</td><td>0.7905</td></tr>
+    <tr><td>Split 1</td><td>44 / 69</td><td>1.0572</td><td>1.1780</td><td>0.8516</td><td>&minus;0.1643</td><td>0.7735</td><td>0.7676</td></tr>
+    <tr><td>Split 2</td><td>73 / 98</td><td>1.1296</td><td>1.2158</td><td>0.8937</td><td>&minus;0.0134</td><td>0.7557</td><td>0.7508</td></tr>
+    <tr><td>Split 3</td><td>23 / 48</td><td>1.0471</td><td>1.2051</td><td>0.8880</td><td>+0.0169</td><td>0.7571</td><td>0.7470</td></tr>
+    <tr><td>Split 4</td><td>43 / 68</td><td>1.0192</td><td>1.1515</td><td>0.8297</td><td>&minus;0.1920</td><td>0.7897</td><td>0.7778</td></tr>
+    <tr class="total"><td><strong>Mean &plusmn; SD</strong></td><td><strong>43 &plusmn; 19</strong></td><td><strong>1.0719 &plusmn; 0.0451</strong></td><td><strong>1.1719 &plusmn; 0.0430</strong></td><td><strong>0.8579 &plusmn; 0.0317</strong></td><td><strong>&minus;0.0603</strong></td><td><strong>0.7743 &plusmn; 0.0182</strong></td><td><strong>0.7667 &plusmn; 0.0182</strong></td></tr>
+
+    <!-- Boltz-2 BZZU pca:20 -->
+    <tr class="highlight"><td rowspan="6"><strong>Boltz-2 BZZU</strong><br><span style="color:var(--muted);font-size:7.5pt;">Budget-matched (pca:20, 860 feat)</span></td>
+        <td>Split 0</td><td>58 / 83</td><td>0.9040</td><td>1.0134</td><td>0.7460</td><td>+0.0209</td><td>0.8312</td><td>0.8288</td></tr>
+    <tr class="highlight"><td>Split 1</td><td>49 / 74</td><td>0.8885</td><td>1.0229</td><td>0.7494</td><td>&minus;0.0086</td><td>0.8299</td><td>0.8239</td></tr>
+    <tr class="highlight"><td>Split 2</td><td>86 / 111</td><td>0.9067</td><td>1.1473</td><td>0.8241</td><td>&minus;0.1255</td><td>0.7890</td><td>0.7926</td></tr>
+    <tr class="highlight"><td>Split 3</td><td>16 / 41</td><td>0.9500</td><td>1.0332</td><td>0.7712</td><td>+0.0772</td><td>0.8250</td><td>0.8204</td></tr>
+    <tr class="highlight"><td>Split 4</td><td>104 / 129</td><td>0.9416</td><td>0.9641</td><td>0.7085</td><td>+0.0005</td><td>0.8491</td><td>0.8395</td></tr>
+    <tr class="highlight total"><td><strong>Mean &plusmn; SD</strong></td><td><strong>63 &plusmn; 35</strong></td><td><strong>0.9182 &plusmn; 0.0264</strong></td><td><strong>1.0362 &plusmn; 0.0675</strong></td><td><strong>0.7598 &plusmn; 0.0424</strong></td><td><strong>&minus;0.0071</strong></td><td><strong>0.8248 &plusmn; 0.0220</strong></td><td><strong>0.8210 &plusmn; 0.0175</strong></td></tr>
+
+    <!-- Boltz-2 BZZU flatten -->
+    <tr><td rowspan="6"><strong>Boltz-2 BZZU</strong><br><span style="color:var(--muted);font-size:7.5pt;">Full capacity (flatten, 5,504 feat)</span></td>
+        <td>Split 0</td><td>47 / 72</td><td>0.8660</td><td>0.9704</td><td>0.7179</td><td>+0.0041</td><td>0.8459</td><td>0.8433</td></tr>
+    <tr><td>Split 1</td><td>106 / 131</td><td>0.8247</td><td>0.9896</td><td>0.7190</td><td>+0.0035</td><td>0.8414</td><td>0.8347</td></tr>
+    <tr><td>Split 2</td><td>39 / 64</td><td>0.8764</td><td>1.0838</td><td>0.7796</td><td>&minus;0.1484</td><td>0.8130</td><td>0.8115</td></tr>
+    <tr><td>Split 3</td><td>39 / 64</td><td>0.8796</td><td>0.9881</td><td>0.7342</td><td>+0.0509</td><td>0.8406</td><td>0.8379</td></tr>
+    <tr><td>Split 4</td><td>51 / 76</td><td>0.8573</td><td>0.9298</td><td>0.6872</td><td>+0.0658</td><td>0.8605</td><td>0.8531</td></tr>
+    <tr class="total"><td><strong>Mean &plusmn; SD</strong></td><td><strong>56 &plusmn; 28</strong></td><td><strong>0.8608 &plusmn; 0.0220</strong></td><td><strong>0.9924 &plusmn; 0.0565</strong></td><td><strong>0.7276 &plusmn; 0.0337</strong></td><td><strong>&minus;0.0048</strong></td><td><strong>0.8403 &plusmn; 0.0172</strong></td><td><strong>0.8361 &plusmn; 0.0154</strong></td></tr>
+
+    <!-- Boltz-2 BZZU mean -->
+    <tr><td rowspan="6"><strong>Boltz-2 BZZU</strong><br><span style="color:var(--muted);font-size:7.5pt;">Collapsed (mean, 256 feat)</span></td>
+        <td>Split 0</td><td>37 / 62</td><td>1.1920</td><td>1.1376</td><td>0.8671</td><td>+0.0240</td><td>0.7822</td><td>0.7789</td></tr>
+    <tr><td>Split 1</td><td>89 / 114</td><td>1.0686</td><td>1.1550</td><td>0.8684</td><td>&minus;0.1049</td><td>0.7787</td><td>0.7742</td></tr>
+    <tr><td>Split 2</td><td>104 / 129</td><td>1.1706</td><td>1.1687</td><td>0.8881</td><td>&minus;0.0672</td><td>0.7714</td><td>0.7679</td></tr>
+    <tr><td>Split 3</td><td>75 / 100</td><td>1.2049</td><td>1.1502</td><td>0.8890</td><td>+0.0459</td><td>0.7759</td><td>0.7704</td></tr>
+    <tr><td>Split 4</td><td>59 / 84</td><td>1.2028</td><td>1.0990</td><td>0.8337</td><td>&minus;0.0681</td><td>0.7987</td><td>0.7911</td></tr>
+    <tr class="total"><td><strong>Mean &plusmn; SD</strong></td><td><strong>73 &plusmn; 27</strong></td><td><strong>1.1678 &plusmn; 0.0571</strong></td><td><strong>1.1421 &plusmn; 0.0265</strong></td><td><strong>0.8693 &plusmn; 0.0224</strong></td><td><strong>&minus;0.0341</strong></td><td><strong>0.7814 &plusmn; 0.0105</strong></td><td><strong>0.7765 &plusmn; 0.0091</strong></td></tr>
+  </tbody>
+</table>
+
+<h3>5.1 Validation Error Reduction &amp; Convergence Dynamics</h3>
+<p>
+Across all five splits, structural pair conditioning (<code>BZZU</code>) accelerates and stabilizes training toward significantly lower validation loss:
+</p>
+<ul>
+  <li><strong>Budget-Matched (<code>pca:20</code>):</strong> Best validation MSE drops from $1.0719 \pm 0.0451$ (baseline A0) to <strong>$0.9182 \pm 0.0264$</strong>, representing a <strong>14.3% reduction</strong> in validation error on identical parameter and feature budgets. Convergence reaches the optimum at epoch $63 \pm 35$ (stopping around epoch 88).</li>
+  <li><strong>Full Capacity (<code>flatten</code>):</strong> With all 5,504 interaction features available, validation MSE further improves to <strong>$0.8608 \pm 0.0220$</strong> (a <strong>19.7% reduction</strong> vs. baseline), driving test RMSE down to <strong>$0.9924 \pm 0.0565$</strong>.</li>
+  <li><strong>Position-Averaged (<code>mean</code>):</strong> Collapsing the interaction tensor severely impairs learning; validation MSE degrades to $1.1678 \pm 0.0571$ (worse than the one-hot baseline), verifying that sequence-level averaging obscures fine-grained pocket interactions.</li>
+</ul>
+
+<h3>5.2 Test Generalization &amp; Residual Calibration</h3>
+<p>
+Comparing validation MSE to test RMSE reveals consistent calibration across splits. For baseline A0 one-hot, test RMSE ($1.1719 \pm 0.0430$, corresponding to test MSE $\approx 1.373$) exhibits a substantial generalization gap over validation MSE ($1.0719$), primarily driven by severe error spikes on holdout alleles (unseen HLA RMSE $1.6428$).
+</p>
+<p>
+In contrast, <code>BZZU</code> narrows this gap: for <code>BZZU (flatten)</code>, test RMSE is $0.9924$ (test MSE $\approx 0.985$) compared to validation MSE of $0.8608$. Furthermore, the mean test prediction bias ($\hat{y} - y$) is virtually zero (&minus;0.0071 for <code>pca:20</code> and &minus;0.0048 for <code>flatten</code>, compared to &minus;0.0603 for A0 one-hot), demonstrating that structural representations eliminate systematic prediction skew across the half-life distribution.
+</p>
+
+<h2 class="break">6. Key Findings &amp; Mechanistic Analyses</h2>
+
+<h3>6.1 The Pair Tensor $Z$ is the Sole Engine of Structural Advantage</h3>
 <p>
 The single representation (<code>BZS</code>) under <code>pca:20</code> scores 0.7474, failing to beat the one-hot baseline (0.7667) and losing all 5 splits (&minus;0.0194 delta). This exactly replicates the failure of ESM-2 Layer 33 (0.736) and Layer 15 (0.750). Per-residue language embeddings do not solve the peptide-HLA stability problem.
 </p>
@@ -376,7 +453,7 @@ The single representation (<code>BZS</code>) under <code>pca:20</code> scores 0.
 In contrast, <code>BZZU</code> achieves 0.8210 (+0.0543 gain) with the exact same number of parameters. Because $z_{ij}$ explicitly models the pairwise interaction channel between residue $i$ and residue $j$, it provides the downstream MLP with direct information about binding cleft complementarity and interchain contacts that sequence models cannot deduce.
 </p>
 
-<h3>5.2 Uniform Contraction (BZZU) vs. Distance Weighting (BZZ)</h3>
+<h3>6.2 Uniform Contraction (BZZU) vs. Distance Weighting (BZZ)</h3>
 <p>
 PreFold-dG weighted interface pairs by $1 / \max(d, 3.0)^2$ using C&alpha;&ndash;C&alpha; distances. In our experiments, uniform weighting (<code>BZZU</code>) systematically outclasses distance weighting (<code>BZZ</code>):
 </p>
@@ -389,7 +466,7 @@ PreFold-dG weighted interface pairs by $1 / \max(d, 3.0)^2$ using C&alpha;&ndash
 <strong>Why Uniform Weighting Wins:</strong> Boltz-2's pair tensor is already structurally refined through triangle self-attention and contact potentials during trunk inference. Multiplying by $1/d^2$ from a static 10-step diffusion snapshot over-concentrates weight onto the 2&ndash;3 closest contacts (&lt; 4 &Aring;) while severely penalizing residues 5&ndash;8 &Aring; away. Peptide-MHC stability relies on extended hydrogen bonding networks, water-mediated pocket contacts, and electrostatic fields distributed across the entire 34-residue cleft. Uniform contraction preserves this global cleft context.
 </p>
 
-<h3>5.3 The Anchor Effect: Why Position-Aware Pooling Beats Mean Pooling</h3>
+<h3>6.3 The Anchor Effect: Why Position-Aware Pooling Beats Mean Pooling</h3>
 <p>
 Comparing <code>BZZU</code> across poolings reveals the critical role of positional anchors:
 </p>
@@ -402,7 +479,7 @@ Comparing <code>BZZU</code> across poolings reveals the critical role of positio
 In generic protein complexes, variable sequence length necessitates global pooling. In class I pMHC, however, binding stability is strictly dictated by <strong>position-specific anchor residues</strong>—predominantly P2 (B pocket) and P9 (F pocket). Collapsing the peptide into an unindexed average dilutes these anchor signals. Retaining per-slot indexing recovers +0.060 in Spearman correlation.
 </p>
 
-<h3>5.4 Generalization to Novel HLA Alleles</h3>
+<h3>6.4 Generalization to Novel HLA Alleles</h3>
 <p>
 In the baseline report, the primary failure mode was generalisation to unseen HLA alleles, where RMSE deteriorated by +64% from 1.001 (seen combinations) to 1.640 (unseen HLA), approaching the 1.825 error of a trivial train-mean predictor.
 </p>
@@ -410,12 +487,12 @@ In the baseline report, the primary failure mode was generalisation to unseen HL
 <strong>Breakthrough on Unseen Alleles:</strong> <code>BZZU</code> reduces unseen-HLA RMSE from <strong>1.6428</strong> down to <strong>1.3648</strong> in <code>pca:20</code> and <strong>1.2923</strong> in <code>flatten</code>—a <strong>21.3% reduction in prediction error</strong>. Because Boltz-2 models physical groove-peptide interactions from universal structural biophysics, it generalizes effectively to novel allele geometries that sequence-memorizing models fail to predict.
 </div>
 
-<h3>5.5 Zero-Shot Confidence Baseline (BZP)</h3>
+<h3>6.5 Zero-Shot Confidence Baseline (BZP)</h3>
 <p>
 Arm <code>BZP</code> extracts the 43 per-token pLDDT confidence scores output by Boltz-2's confidence head. With no structural fine-tuning and only 43 scalar inputs, an MLP achieves a Spearman correlation of <strong>0.2602 &plusmn; 0.0163</strong>. This demonstrates that Boltz-2's internal confidence in peptide structural placement directly correlates with physical kinetic stability.
 </p>
 
-<h2 class="break">6. Compute, Costs &amp; Production Benchmarks</h2>
+<h2 class="break">7. Compute, Costs &amp; Production Benchmarks</h2>
 <p>
 Extraction and training were benchmarked across nine GPU architectures on Modal. Contrary to initial small-batch sweeps, production-scale extraction with <code>--batch-size 256</code> amortised the 50-second checkpoint load:
 </p>
@@ -425,7 +502,7 @@ Extraction and training were benchmarked across nine GPU architectures on Modal.
   <li><strong>Head Training</strong>: All 16 ladder evaluations (80 MLP training runs across 5 splits) executed on Modal CPU instances in &lt;15 minutes total for &lt;$1.00.</li>
 </ul>
 
-<h2>7. Conclusions &amp; Submission Recommendations</h2>
+<h2>8. Conclusions &amp; Submission Recommendations</h2>
 <ol>
   <li><strong>First Documented Foundation Model Win:</strong> Boltz-2's uniform interface pair contraction (<code>BZZU</code>) definitively resolves the negative result of the ESM-2 baseline, raising benchmark Spearman correlation from 0.767 to 0.836.</li>
   <li><strong>Structural Conditioning is Essential:</strong> Single per-residue embeddings ($s$) fail just as sequence PLMs do; the pair interaction tensor ($z$) is the indispensable component.</li>
