@@ -306,6 +306,8 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
                 test=test_metrics, baseline=baseline,
                 test_subsets={name: metrics(y_test[mask], predictions[mask])
                               for name, mask in subsets.items() if mask.any()},
+                predictions=predictions, y_test=y_test,
+                thalf_hours=test_raw['thalf_hours'].astype(np.float64),
                 history=history, seed=seed, target_fixes=target_fixes,
                 train_seconds=time.monotonic()-started), model
 
@@ -506,6 +508,9 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
             clean_target_csv=clean_target_csv)
         # Tensors, so they belong in the checkpoint and not in metrics.json.
         fitted_state = result.pop('fitted_state')
+        result.pop('predictions', None)
+        result.pop('y_test', None)
+        result.pop('thalf_hours', None)
         if save_models:
             torch.save(dict(state_dict=model.state_dict(), hidden=tuple(hidden),
                             dropout=dropout, features=result['features'],
