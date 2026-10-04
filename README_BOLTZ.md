@@ -84,6 +84,35 @@ axis would destroy the P2/P9 anchor signal that dominates class I binding.
 `BZZU` makes "does the distance weighting earn its keep" a one-line ablation
 rather than a second extraction.
 
+### Which parts of Boltz-2 actually run
+
+Not trunk-only. The extractor runs `boltz predict` with `--sampling_steps 10
+--recycling_steps 3 --diffusion_samples 1`, so the **trunk, the diffusion module
+and the confidence module all execute**. Three of the five cached arrays are
+trunk-only; two depend on the diffusion path:
+
+| Array | Trunk `s`/`z` | Diffusion coords | Confidence |
+|---|:--:|:--:|:--:|
+| `boltz_S.npy` | yes | — | — |
+| `boltz_ZU.npy` | yes | — | — |
+| `boltz_ZRAW.npy` | yes | — | — |
+| `boltz_Z.npy` | yes | **yes** (1/d² weights from Cα) | — |
+| `boltz_PLDDT.npy` | — | yes (indirectly) | **yes** |
+
+Diffusion is run on purpose, for two reasons. The 1/d² interface weighting uses
+**real Cα-Cα distances from the predicted structure**, which is sharper than
+the distogram's binned expectation. And pLDDT comes from the confidence module,
+which scores the sampled coordinates — so arm `BZP` does not exist without it.
+
+The cost is small. From the measured conditions, the marginal cost of a sampling
+step is 0.0388 s, so 10 steps is **0.39 s, about 5%** of the 7.73 s/complex
+single-process rate. By contrast 200 steps would be 51% and recycling 0→3 is
+28%. Going genuinely trunk-only (`skip_run_structure`) would save that 5% plus
+some unmeasured fixed overhead — `diffusion_conditioning` and the confidence
+module run once per complex regardless of step count — and would cost `BZP`
+entirely and force distogram-based weighting. Not a trade worth taking. A
+`sampling_steps=1` condition would pin the fixed part if it ever matters.
+
 ### Stage 2 — joining a split to the cache
 
 The cache is **split-agnostic**: row `i` of every array is `source_row` `i`, and
