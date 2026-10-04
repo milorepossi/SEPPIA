@@ -1,0 +1,457 @@
+{
+  "iid": {
+    "split_name": "iid",
+    "n_train": 19716,
+    "n_val": 4225,
+    "n_test": 4225,
+    "metrics": {
+      "onehot_xgboost": {
+        "pearson_r_log": 0.0628,
+        "pearson_r_raw": 0.0686,
+        "spearman_rho": 0.0326,
+        "rmse_log": 1.1004,
+        "rmse_raw": 13.2395,
+        "mae_raw": 5.3999,
+        "auc_roc_1h": 0.5041,
+        "pr_auc_1h": 0.5307,
+        "auc_roc_2h": 0.5102,
+        "pr_auc_2h": 0.4201
+      },
+      "neural_network": {
+        "pearson_r_log": 0.7201,
+        "pearson_r_raw": 0.6295,
+        "spearman_rho": 0.6951,
+        "rmse_log": 0.7752,
+        "rmse_raw": 10.0643,
+        "mae_raw": 3.7424,
+        "auc_roc_1h": 0.8459,
+        "pr_auc_1h": 0.8532,
+        "auc_roc_2h": 0.8527,
+        "pr_auc_2h": 0.8013
+      },
+      "xgboost_on_embeddings": {
+        "pearson_r_log": 0.7215,
+        "pearson_r_raw": 0.6291,
+        "spearman_rho": 0.6951,
+        "rmse_log": 0.7635,
+        "rmse_raw": 10.6334,
+        "mae_raw": 3.9059,
+        "auc_roc_1h": 0.8465,
+        "pr_auc_1h": 0.8541,
+        "auc_roc_2h": 0.853,
+        "pr_auc_2h": 0.8032
+      }
+    },
+    "training_time_seconds": {
+      "neural_network": 47.71,
+      "onehot_xgboost": 1.3,
+      "xgboost_on_embeddings": 1.11
+    },
+    "feature_importances_top10": [
+      {
+        "feat_idx": 179,
+        "importance": 0.24231916666030884
+      },
+      {
+        "feat_idx": 192,
+        "importance": 0.12189118564128876
+      },
+      {
+        "feat_idx": 142,
+        "importance": 0.11785870790481567
+      },
+      {
+        "feat_idx": 173,
+        "importance": 0.11082426458597183
+      },
+      {
+        "feat_idx": 145,
+        "importance": 0.05839267745614052
+      },
+      {
+        "feat_idx": 129,
+        "importance": 0.028166459873318672
+      },
+      {
+        "feat_idx": 182,
+        "importance": 0.013205456547439098
+      },
+      {
+        "feat_idx": 138,
+        "importance": 0.006261385977268219
+      },
+      {
+        "feat_idx": 131,
+        "importance": 0.004422730766236782
+      },
+      {
+        "feat_idx": 147,
+        "importance": 0.004301846493035555
+      }
+    ]
+  },
+  "novel_pep": {
+    "split_name": "novel_pep",
+    "n_train": 19848,
+    "n_val": 4148,
+    "n_test": 4170,
+    "metrics": {
+      "onehot_xgboost": {
+        "pearson_r_log": -0.0557,
+        "pearson_r_raw": -0.041,
+        "spearman_rho": -0.0283,
+        "rmse_log": 1.0825,
+        "rmse_raw": 11.9982,
+        "mae_raw": 5.0579,
+        "auc_roc_1h": 0.495,
+        "pr_auc_1h": 0.5011,
+        "auc_roc_2h": 0.4922,
+        "pr_auc_2h": 0.3894
+      },
+      "neural_network": {
+        "pearson_r_log": 0.6142,
+        "pearson_r_raw": 0.4714,
+        "spearman_rho": 0.6279,
+        "rmse_log": 0.8828,
+        "rmse_raw": 10.3852,
+        "mae_raw": 4.2115,
+        "auc_roc_1h": 0.8119,
+        "pr_auc_1h": 0.8044,
+        "auc_roc_2h": 0.8199,
+        "pr_auc_2h": 0.7338
+      },
+      "xgboost_on_embeddings": {
+        "pearson_r_log": 0.6114,
+        "pearson_r_raw": 0.4793,
+        "spearman_rho": 0.6224,
+        "rmse_log": 0.8561,
+        "rmse_raw": 10.6798,
+        "mae_raw": 4.1925,
+        "auc_roc_1h": 0.8104,
+        "pr_auc_1h": 0.8036,
+        "auc_roc_2h": 0.8171,
+        "pr_auc_2h": 0.7314
+      }
+    },
+    "training_time_seconds": {
+      "neural_network": 36.72,
+      "onehot_xgboost": 1.12,
+      "xgboost_on_embeddings": 0.9
+    },
+    "feature_importances_top10": [
+      {
+        "feat_idx": 155,
+        "importance": 0.1925843209028244
+      },
+      {
+        "feat_idx": 173,
+        "importance": 0.18456000089645386
+      },
+      {
+        "feat_idx": 192,
+        "importance": 0.12159176915884018
+      },
+      {
+        "feat_idx": 138,
+        "importance": 0.11876069754362106
+      },
+      {
+        "feat_idx": 145,
+        "importance": 0.028528761118650436
+      },
+      {
+        "feat_idx": 142,
+        "importance": 0.011801526881754398
+      },
+      {
+        "feat_idx": 179,
+        "importance": 0.006282589863985777
+      },
+      {
+        "feat_idx": 185,
+        "importance": 0.005669665988534689
+      },
+      {
+        "feat_idx": 180,
+        "importance": 0.004830743186175823
+      },
+      {
+        "feat_idx": 131,
+        "importance": 0.004443083889782429
+      }
+    ]
+  },
+  "novel_allele": {
+    "split_name": "novel_allele",
+    "n_train": 20190,
+    "n_val": 4066,
+    "n_test": 3773,
+    "metrics": {
+      "onehot_xgboost": {
+        "pearson_r_log": 0.0646,
+        "pearson_r_raw": 0.0643,
+        "spearman_rho": 0.0487,
+        "rmse_log": 1.1789,
+        "rmse_raw": 16.9287,
+        "mae_raw": 6.5536,
+        "auc_roc_1h": 0.5118,
+        "pr_auc_1h": 0.5229,
+        "auc_roc_2h": 0.5231,
+        "pr_auc_2h": 0.4332
+      },
+      "neural_network": {
+        "pearson_r_log": 0.3664,
+        "pearson_r_raw": 0.1712,
+        "spearman_rho": 0.3732,
+        "rmse_log": 1.1266,
+        "rmse_raw": 16.7382,
+        "mae_raw": 6.0439,
+        "auc_roc_1h": 0.704,
+        "pr_auc_1h": 0.7146,
+        "auc_roc_2h": 0.698,
+        "pr_auc_2h": 0.6256
+      },
+      "xgboost_on_embeddings": {
+        "pearson_r_log": 0.3992,
+        "pearson_r_raw": 0.2032,
+        "spearman_rho": 0.3968,
+        "rmse_log": 1.0972,
+        "rmse_raw": 16.7914,
+        "mae_raw": 6.2016,
+        "auc_roc_1h": 0.7084,
+        "pr_auc_1h": 0.7274,
+        "auc_roc_2h": 0.7064,
+        "pr_auc_2h": 0.6484
+      }
+    },
+    "training_time_seconds": {
+      "neural_network": 13.89,
+      "onehot_xgboost": 1.32,
+      "xgboost_on_embeddings": 0.82
+    },
+    "feature_importances_top10": [
+      {
+        "feat_idx": 173,
+        "importance": 0.142769455909729
+      },
+      {
+        "feat_idx": 129,
+        "importance": 0.07748875021934509
+      },
+      {
+        "feat_idx": 136,
+        "importance": 0.076229028403759
+      },
+      {
+        "feat_idx": 192,
+        "importance": 0.03215397149324417
+      },
+      {
+        "feat_idx": 145,
+        "importance": 0.02323068492114544
+      },
+      {
+        "feat_idx": 163,
+        "importance": 0.018122049048542976
+      },
+      {
+        "feat_idx": 186,
+        "importance": 0.013008985668420792
+      },
+      {
+        "feat_idx": 126,
+        "importance": 0.012269975617527962
+      },
+      {
+        "feat_idx": 80,
+        "importance": 0.011523054912686348
+      },
+      {
+        "feat_idx": 90,
+        "importance": 0.007524187210947275
+      }
+    ]
+  },
+  "h2": {
+    "split_name": "h2",
+    "n_train": 22535,
+    "n_val": 2816,
+    "n_test": 2815,
+    "metrics": {
+      "onehot_xgboost": {
+        "pearson_r_log": 0.0596,
+        "pearson_r_raw": 0.0566,
+        "spearman_rho": 0.0909,
+        "rmse_log": 1.0425,
+        "rmse_raw": 9.0099,
+        "mae_raw": 4.4929,
+        "auc_roc_1h": 0.5395,
+        "pr_auc_1h": 0.5596,
+        "auc_roc_2h": 0.5465,
+        "pr_auc_2h": 0.4455
+      },
+      "neural_network": {
+        "pearson_r_log": 0.6185,
+        "pearson_r_raw": 0.5408,
+        "spearman_rho": 0.626,
+        "rmse_log": 0.8451,
+        "rmse_raw": 7.4295,
+        "mae_raw": 3.6119,
+        "auc_roc_1h": 0.8103,
+        "pr_auc_1h": 0.8122,
+        "auc_roc_2h": 0.8132,
+        "pr_auc_2h": 0.7377
+      },
+      "xgboost_on_embeddings": {
+        "pearson_r_log": 0.6097,
+        "pearson_r_raw": 0.5246,
+        "spearman_rho": 0.6214,
+        "rmse_log": 0.8298,
+        "rmse_raw": 7.8634,
+        "mae_raw": 3.7152,
+        "auc_roc_1h": 0.8084,
+        "pr_auc_1h": 0.8099,
+        "auc_roc_2h": 0.8116,
+        "pr_auc_2h": 0.7342
+      }
+    },
+    "training_time_seconds": {
+      "neural_network": 36.65,
+      "onehot_xgboost": 1.14,
+      "xgboost_on_embeddings": 0.86
+    },
+    "feature_importances_top10": [
+      {
+        "feat_idx": 182,
+        "importance": 0.22124849259853363
+      },
+      {
+        "feat_idx": 192,
+        "importance": 0.16730253398418427
+      },
+      {
+        "feat_idx": 129,
+        "importance": 0.08963599801063538
+      },
+      {
+        "feat_idx": 145,
+        "importance": 0.0857764333486557
+      },
+      {
+        "feat_idx": 156,
+        "importance": 0.02101130783557892
+      },
+      {
+        "feat_idx": 187,
+        "importance": 0.018137149512767792
+      },
+      {
+        "feat_idx": 138,
+        "importance": 0.009450465440750122
+      },
+      {
+        "feat_idx": 128,
+        "importance": 0.009032721631228924
+      },
+      {
+        "feat_idx": 131,
+        "importance": 0.007195281330496073
+      },
+      {
+        "feat_idx": 172,
+        "importance": 0.006753270048648119
+      }
+    ]
+  },
+  "aw_blosum": {
+    "split_name": "aw_blosum",
+    "n_train": 22532,
+    "n_val": 2816,
+    "n_test": 2818,
+    "metrics": {
+      "onehot_xgboost": {
+        "pearson_r_log": -0.0192,
+        "pearson_r_raw": -0.0401,
+        "spearman_rho": -0.0063,
+        "rmse_log": 0.991,
+        "rmse_raw": 8.8661,
+        "mae_raw": 3.9818,
+        "auc_roc_1h": 0.5103,
+        "pr_auc_1h": 0.5265,
+        "auc_roc_2h": 0.5014,
+        "pr_auc_2h": 0.3843
+      },
+      "neural_network": {
+        "pearson_r_log": 0.4883,
+        "pearson_r_raw": 0.3373,
+        "spearman_rho": 0.5462,
+        "rmse_log": 0.904,
+        "rmse_raw": 8.2649,
+        "mae_raw": 3.727,
+        "auc_roc_1h": 0.7758,
+        "pr_auc_1h": 0.7477,
+        "auc_roc_2h": 0.7601,
+        "pr_auc_2h": 0.6112
+      },
+      "xgboost_on_embeddings": {
+        "pearson_r_log": 0.4815,
+        "pearson_r_raw": 0.3476,
+        "spearman_rho": 0.5421,
+        "rmse_log": 0.8661,
+        "rmse_raw": 8.3584,
+        "mae_raw": 3.5935,
+        "auc_roc_1h": 0.772,
+        "pr_auc_1h": 0.7426,
+        "auc_roc_2h": 0.7564,
+        "pr_auc_2h": 0.6054
+      }
+    },
+    "training_time_seconds": {
+      "neural_network": 22.18,
+      "onehot_xgboost": 1.07,
+      "xgboost_on_embeddings": 0.79
+    },
+    "feature_importances_top10": [
+      {
+        "feat_idx": 131,
+        "importance": 0.2197476476430893
+      },
+      {
+        "feat_idx": 192,
+        "importance": 0.1771172434091568
+      },
+      {
+        "feat_idx": 156,
+        "importance": 0.033982548862695694
+      },
+      {
+        "feat_idx": 190,
+        "importance": 0.03320696949958801
+      },
+      {
+        "feat_idx": 138,
+        "importance": 0.025407103821635246
+      },
+      {
+        "feat_idx": 129,
+        "importance": 0.016230175271630287
+      },
+      {
+        "feat_idx": 163,
+        "importance": 0.011815192177891731
+      },
+      {
+        "feat_idx": 142,
+        "importance": 0.009917490184307098
+      },
+      {
+        "feat_idx": 173,
+        "importance": 0.009832574054598808
+      },
+      {
+        "feat_idx": 170,
+        "importance": 0.008835377171635628
+      }
+    ]
+  }
+}

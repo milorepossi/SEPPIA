@@ -1,0 +1,119 @@
+{
+  "hamming_threshold": 2,
+  "total_peptides": 5633,
+  "total_samples": 28166,
+  "n_clusters": 5410,
+  "min_test_to_train_distance": 3,
+  "split_summary": {
+    "train": {
+      "n_samples": 22535,
+      "pct_samples": 80.01,
+      "n_peptides": 4658,
+      "pct_peptides": 82.69,
+      "n_binders": 11702,
+      "pct_binders": 51.93,
+      "n_zeros": 4605,
+      "pct_zeros": 20.43,
+      "n_alleles": 75
+    },
+    "val": {
+      "n_samples": 2816,
+      "pct_samples": 10.0,
+      "n_peptides": 492,
+      "pct_peptides": 8.73,
+      "n_binders": 1462,
+      "pct_binders": 51.92,
+      "n_zeros": 540,
+      "pct_zeros": 19.18,
+      "n_alleles": 75
+    },
+    "test": {
+      "n_samples": 2815,
+      "pct_samples": 9.99,
+      "n_peptides": 483,
+      "pct_peptides": 8.57,
+      "n_binders": 1462,
+      "pct_binders": 51.94,
+      "n_zeros": 534,
+      "pct_zeros": 18.97,
+      "n_alleles": 75
+    }
+  },
+  "percolation_analysis": [
+    {
+      "h": 1,
+      "edges": 146,
+      "n_components": 5494,
+      "singletons": 5376,
+      "pct_singletons": 95.43759985797976,
+      "max_cluster_size": 5,
+      "top5_sizes": [
+        5,
+        4,
+        4,
+        4,
+        4
+      ]
+    },
+    {
+      "h": 2,
+      "edges": 260,
+      "n_components": 5410,
+      "singletons": 5230,
+      "pct_singletons": 92.8457305165986,
+      "max_cluster_size": 8,
+      "top5_sizes": [
+        8,
+        5,
+        4,
+        4,
+        4
+      ]
+    },
+    {
+      "h": 3,
+      "edges": 584,
+      "n_components": 5120,
+      "singletons": 4762,
+      "pct_singletons": 84.53754660039056,
+      "max_cluster_size": 22,
+      "top5_sizes": [
+        22,
+        14,
+        11,
+        8,
+        7
+      ]
+    },
+    {
+      "h": 4,
+      "edges": 4737,
+      "n_components": 2194,
+      "singletons": 1810,
+      "pct_singletons": 32.13207882123202,
+      "max_cluster_size": 2807,
+      "top5_sizes": [
+        2807,
+        11,
+        11,
+        10,
+        9
+      ]
+    },
+    {
+      "h": 5,
+      "edges": 48864,
+      "n_components": 9,
+      "singletons": 8,
+      "pct_singletons": 0.14202023788389845,
+      "max_cluster_size": 5625,
+      "top5_sizes": [
+        5625,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  ]
+}

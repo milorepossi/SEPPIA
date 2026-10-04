@@ -1,0 +1,467 @@
+{
+  "non_binding": {
+    "mode_name": "non_binding",
+    "model_name": "biohub/ESMC-6B",
+    "device": "NVIDIA A100-SXM4-40GB",
+    "total_vram_gb": 39.4935302734375,
+    "epochs": 15,
+    "total_time_seconds": 40.39923024177551,
+    "train_samples": 9552,
+    "val_samples": 2005,
+    "test_samples": 1983,
+    "own_test_metrics": {
+      "pearson_r_log": 0.3922857642173767,
+      "spearman_rho": 0.39661962780244586,
+      "pearson_r_raw": 0.37915955596575135,
+      "rmse_log": 0.08859116792700517,
+      "mse_log": 0.00784839503467083,
+      "mae_raw": 0.21449642362705218,
+      "rmse_raw": 0.2730110996996074,
+      "mean_pred_thalf": 0.24496537446975708,
+      "mean_true_thalf": 0.2739838628340897
+    },
+    "cross_eval_metrics": {
+      "non_binding": {
+        "pearson_r_log": 0.3922857642173767,
+        "spearman_rho": 0.39661962780244586,
+        "rmse_log": 0.08859116792700517,
+        "mae_raw": 0.21449642362705218,
+        "mean_pred_thalf": 0.24496537446975708,
+        "mean_true_thalf": 0.2739838628340897
+      },
+      "mild_binding": {
+        "pearson_r_log": -0.03858064487576485,
+        "spearman_rho": -0.03802691328321243,
+        "rmse_log": 0.26585801506759593,
+        "mae_raw": 1.0640459214849698,
+        "mean_pred_thalf": 0.32524746656417847,
+        "mean_true_thalf": 1.3892933618843681
+      },
+      "strong_binding": {
+        "pearson_r_log": 0.03952996805310249,
+        "spearman_rho": 0.05171299611874596,
+        "rmse_log": 0.9298899774689994,
+        "mae_raw": 12.62925955952855,
+        "mean_pred_thalf": 0.3319413959980011,
+        "mean_true_thalf": 12.96120093731693
+      }
+    },
+    "train_history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.4550918753522525,
+        "val_mse": 0.010475924238562584,
+        "val_pearson": 0.23314876854419708,
+        "val_spearman": 0.2521633928389876
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.3757044960006797,
+        "val_mse": 0.008935066871345043,
+        "val_pearson": 0.2654508948326111,
+        "val_spearman": 0.2776894502790887
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.3459805256158263,
+        "val_mse": 0.008015116676688194,
+        "val_pearson": 0.3191998302936554,
+        "val_spearman": 0.328929444016286
+      },
+      {
+        "epoch": 4,
+        "train_loss": 0.31489564361085043,
+        "val_mse": 0.008566908538341522,
+        "val_pearson": 0.3429568409919739,
+        "val_spearman": 0.3524808002029838
+      },
+      {
+        "epoch": 5,
+        "train_loss": 0.298805005586327,
+        "val_mse": 0.008272567763924599,
+        "val_pearson": 0.34264129400253296,
+        "val_spearman": 0.3559309728987026
+      },
+      {
+        "epoch": 6,
+        "train_loss": 0.2817555294064821,
+        "val_mse": 0.00801569502800703,
+        "val_pearson": 0.35085755586624146,
+        "val_spearman": 0.36435749134353856
+      },
+      {
+        "epoch": 7,
+        "train_loss": 0.2707109371421724,
+        "val_mse": 0.00816527009010315,
+        "val_pearson": 0.3355857729911804,
+        "val_spearman": 0.3498959748962514
+      },
+      {
+        "epoch": 8,
+        "train_loss": 0.2580785062444869,
+        "val_mse": 0.008110362105071545,
+        "val_pearson": 0.3593078851699829,
+        "val_spearman": 0.37344276587132713
+      },
+      {
+        "epoch": 9,
+        "train_loss": 0.25101109919835574,
+        "val_mse": 0.007882645353674889,
+        "val_pearson": 0.3633878827095032,
+        "val_spearman": 0.3791995087610221
+      },
+      {
+        "epoch": 10,
+        "train_loss": 0.2395521770270426,
+        "val_mse": 0.008536948822438717,
+        "val_pearson": 0.34722861647605896,
+        "val_spearman": 0.3666017984428993
+      },
+      {
+        "epoch": 11,
+        "train_loss": 0.23411282827107352,
+        "val_mse": 0.008785595186054707,
+        "val_pearson": 0.35311034321784973,
+        "val_spearman": 0.37176886471528287
+      },
+      {
+        "epoch": 12,
+        "train_loss": 0.22262171420020674,
+        "val_mse": 0.00834708847105503,
+        "val_pearson": 0.35283976793289185,
+        "val_spearman": 0.3732393207554617
+      },
+      {
+        "epoch": 13,
+        "train_loss": 0.21626490641578758,
+        "val_mse": 0.008911577984690666,
+        "val_pearson": 0.34719929099082947,
+        "val_spearman": 0.37306635090745527
+      },
+      {
+        "epoch": 14,
+        "train_loss": 0.21124368127266965,
+        "val_mse": 0.008511151187121868,
+        "val_pearson": 0.34783923625946045,
+        "val_spearman": 0.37105714058502365
+      },
+      {
+        "epoch": 15,
+        "train_loss": 0.2050551410446215,
+        "val_mse": 0.008550064638257027,
+        "val_pearson": 0.34999802708625793,
+        "val_spearman": 0.37276549833294514
+      }
+    ]
+  },
+  "mild_binding": {
+    "mode_name": "mild_binding",
+    "model_name": "biohub/ESMC-6B",
+    "device": "NVIDIA A100-SXM4-40GB",
+    "total_vram_gb": 39.4935302734375,
+    "epochs": 15,
+    "total_time_seconds": 32.59291911125183,
+    "train_samples": 2228,
+    "val_samples": 476,
+    "test_samples": 467,
+    "own_test_metrics": {
+      "pearson_r_log": -0.021333588287234306,
+      "spearman_rho": 0.001589499692592162,
+      "pearson_r_raw": -0.01952476261876049,
+      "rmse_log": 0.06057790184287371,
+      "mse_log": 0.003669682191684842,
+      "mae_raw": 0.26541007458525495,
+      "rmse_raw": 0.3389496569721786,
+      "mean_pred_thalf": 1.1945618391036987,
+      "mean_true_thalf": 1.3892933618843681
+    },
+    "cross_eval_metrics": {
+      "non_binding": {
+        "pearson_r_log": 0.010680131614208221,
+        "spearman_rho": 0.009462925839634853,
+        "rmse_log": 0.26407088712205,
+        "mae_raw": 0.9180689757073461,
+        "mean_pred_thalf": 1.1920528411865234,
+        "mean_true_thalf": 0.2739838628340897
+      },
+      "mild_binding": {
+        "pearson_r_log": -0.021333588287234306,
+        "spearman_rho": 0.001589499692592162,
+        "rmse_log": 0.06057790184287371,
+        "mae_raw": 0.26541007458525495,
+        "mean_pred_thalf": 1.1945618391036987,
+        "mean_true_thalf": 1.3892933618843681
+      },
+      "strong_binding": {
+        "pearson_r_log": -0.02116185985505581,
+        "spearman_rho": -0.014458549416998584,
+        "rmse_log": 0.7304269299291118,
+        "mae_raw": 11.766175781008648,
+        "mean_pred_thalf": 1.1950252056121826,
+        "mean_true_thalf": 12.96120093731693
+      }
+    },
+    "train_history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.5620342647151845,
+        "val_mse": 0.003245243104174733,
+        "val_pearson": 0.04935985431075096,
+        "val_spearman": 0.03478949266063312
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.4254475551618922,
+        "val_mse": 0.0028510920237749815,
+        "val_pearson": 0.04200592264533043,
+        "val_spearman": 0.02660982711246989
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.4342191188296895,
+        "val_mse": 0.002591383643448353,
+        "val_pearson": 0.02404220774769783,
+        "val_spearman": 0.010956826222277569
+      },
+      {
+        "epoch": 4,
+        "train_loss": 0.41496282098965326,
+        "val_mse": 0.0031798447016626596,
+        "val_pearson": 0.03274092823266983,
+        "val_spearman": 0.022329061742034167
+      },
+      {
+        "epoch": 5,
+        "train_loss": 0.4072884471026956,
+        "val_mse": 0.00336499628610909,
+        "val_pearson": 0.02196856029331684,
+        "val_spearman": 0.019741125658939197
+      },
+      {
+        "epoch": 6,
+        "train_loss": 0.39003518935379905,
+        "val_mse": 0.003325976198539138,
+        "val_pearson": 0.014261378906667233,
+        "val_spearman": 0.01995661433199114
+      },
+      {
+        "epoch": 7,
+        "train_loss": 0.364473853975909,
+        "val_mse": 0.004451853688806295,
+        "val_pearson": 0.009690125472843647,
+        "val_spearman": 0.021763403975272818
+      },
+      {
+        "epoch": 8,
+        "train_loss": 0.35731418610047183,
+        "val_mse": 0.004379092250019312,
+        "val_pearson": 0.021975962445139885,
+        "val_spearman": 0.027090700614418185
+      },
+      {
+        "epoch": 9,
+        "train_loss": 0.34433887173928307,
+        "val_mse": 0.003923628944903612,
+        "val_pearson": 0.021760443225502968,
+        "val_spearman": 0.028169095982651365
+      },
+      {
+        "epoch": 10,
+        "train_loss": 0.3128395455101876,
+        "val_mse": 0.0038754064589738846,
+        "val_pearson": 0.02177477441728115,
+        "val_spearman": 0.02813667188137874
+      },
+      {
+        "epoch": 11,
+        "train_loss": 0.3045930900950406,
+        "val_mse": 0.0035077063366770744,
+        "val_pearson": 0.024915024638175964,
+        "val_spearman": 0.03544155869727991
+      },
+      {
+        "epoch": 12,
+        "train_loss": 0.2927837822338837,
+        "val_mse": 0.003539193421602249,
+        "val_pearson": 0.026355799287557602,
+        "val_spearman": 0.03355765681314778
+      },
+      {
+        "epoch": 13,
+        "train_loss": 0.289508624982149,
+        "val_mse": 0.0036244213115423918,
+        "val_pearson": 0.02557738684117794,
+        "val_spearman": 0.03307555130735147
+      },
+      {
+        "epoch": 14,
+        "train_loss": 0.2832613560091871,
+        "val_mse": 0.0036408035084605217,
+        "val_pearson": 0.02504155971109867,
+        "val_spearman": 0.03138272202001073
+      },
+      {
+        "epoch": 15,
+        "train_loss": 0.2792054007040534,
+        "val_mse": 0.0036349256988614798,
+        "val_pearson": 0.025268781930208206,
+        "val_spearman": 0.03206648415565632
+      }
+    ]
+  },
+  "strong_binding": {
+    "mode_name": "strong_binding",
+    "model_name": "biohub/ESMC-6B",
+    "device": "NVIDIA A100-SXM4-40GB",
+    "total_vram_gb": 39.4935302734375,
+    "epochs": 15,
+    "total_time_seconds": 40.28757166862488,
+    "train_samples": 8033,
+    "val_samples": 1715,
+    "test_samples": 1707,
+    "own_test_metrics": {
+      "pearson_r_log": 0.39841902256011963,
+      "spearman_rho": 0.37246745338090215,
+      "pearson_r_raw": 0.35697188079428077,
+      "rmse_log": 0.3349179498875386,
+      "mse_log": 0.1121700331568718,
+      "mae_raw": 8.633231501241282,
+      "rmse_raw": 15.278518134108326,
+      "mean_pred_thalf": 11.833134651184082,
+      "mean_true_thalf": 12.96120093731693
+    },
+    "cross_eval_metrics": {
+      "non_binding": {
+        "pearson_r_log": 0.0042613777332007885,
+        "spearman_rho": -0.0022701494643753155,
+        "rmse_log": 0.9555287614443095,
+        "mae_raw": 10.434504684240482,
+        "mean_pred_thalf": 10.708487510681152,
+        "mean_true_thalf": 0.2739838628340897
+      },
+      "mild_binding": {
+        "pearson_r_log": 0.012036774307489395,
+        "spearman_rho": 0.018554830863413654,
+        "rmse_log": 0.672834443205374,
+        "mae_raw": 9.319724777679117,
+        "mean_pred_thalf": 10.709017753601074,
+        "mean_true_thalf": 1.3892933618843681
+      },
+      "strong_binding": {
+        "pearson_r_log": 0.39841902256011963,
+        "spearman_rho": 0.37246745338090215,
+        "rmse_log": 0.3349179498875386,
+        "mae_raw": 8.633231501241282,
+        "mean_pred_thalf": 11.833134651184082,
+        "mean_true_thalf": 12.96120093731693
+      }
+    },
+    "train_history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.5946358554570713,
+        "val_mse": 0.11671638488769531,
+        "val_pearson": 0.36346086859703064,
+        "val_spearman": 0.33835931150029613
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.4994477411662747,
+        "val_mse": 0.1127028539776802,
+        "val_pearson": 0.37371012568473816,
+        "val_spearman": 0.35242005920206554
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.474574739581604,
+        "val_mse": 0.11181429028511047,
+        "val_pearson": 0.3767566978931427,
+        "val_spearman": 0.35496620884633323
+      },
+      {
+        "epoch": 4,
+        "train_loss": 0.45070977692851594,
+        "val_mse": 0.12199411541223526,
+        "val_pearson": 0.40457525849342346,
+        "val_spearman": 0.3874036924983411
+      },
+      {
+        "epoch": 5,
+        "train_loss": 0.43015418391914517,
+        "val_mse": 0.11328069120645523,
+        "val_pearson": 0.3950828015804291,
+        "val_spearman": 0.3802195948643852
+      },
+      {
+        "epoch": 6,
+        "train_loss": 0.4186295961867705,
+        "val_mse": 0.11250432580709457,
+        "val_pearson": 0.40316033363342285,
+        "val_spearman": 0.4011466402192392
+      },
+      {
+        "epoch": 7,
+        "train_loss": 0.4034754027840092,
+        "val_mse": 0.11663293093442917,
+        "val_pearson": 0.4185207188129425,
+        "val_spearman": 0.40289721618462243
+      },
+      {
+        "epoch": 8,
+        "train_loss": 0.3888173823440919,
+        "val_mse": 0.14091330766677856,
+        "val_pearson": 0.39318758249282837,
+        "val_spearman": 0.400051262433947
+      },
+      {
+        "epoch": 9,
+        "train_loss": 0.3740842235491995,
+        "val_mse": 0.12365859746932983,
+        "val_pearson": 0.4008577764034271,
+        "val_spearman": 0.3951373340853556
+      },
+      {
+        "epoch": 10,
+        "train_loss": 0.36583915700447095,
+        "val_mse": 0.11404162645339966,
+        "val_pearson": 0.3930952548980713,
+        "val_spearman": 0.3942481219689161
+      },
+      {
+        "epoch": 11,
+        "train_loss": 0.35264777914607837,
+        "val_mse": 0.11340871453285217,
+        "val_pearson": 0.38618165254592896,
+        "val_spearman": 0.38824865401216796
+      },
+      {
+        "epoch": 12,
+        "train_loss": 0.34071376688985233,
+        "val_mse": 0.11659789830446243,
+        "val_pearson": 0.3790552020072937,
+        "val_spearman": 0.3795108214231453
+      },
+      {
+        "epoch": 13,
+        "train_loss": 0.3358471084617521,
+        "val_mse": 0.11737821251153946,
+        "val_pearson": 0.3696305751800537,
+        "val_spearman": 0.37018482190962254
+      },
+      {
+        "epoch": 14,
+        "train_loss": 0.32704728596180505,
+        "val_mse": 0.12080088257789612,
+        "val_pearson": 0.36981481313705444,
+        "val_spearman": 0.3696864119623047
+      },
+      {
+        "epoch": 15,
+        "train_loss": 0.3230091987385721,
+        "val_mse": 0.12237163633108139,
+        "val_pearson": 0.36495330929756165,
+        "val_spearman": 0.3643134409150982
+      }
+    ]
+  }
+}
