@@ -76,6 +76,34 @@ def one_hot(sequences, length):
     return encoded.reshape(len(sequences), -1)
 
 
+def apply_clean_target(raw, csv_path):
+    """Replace thalf_hours with the uncorrupted CSV values, joined on source_row.
+
+    The committed split .npz files carry the target recovered from the
+    Excel-mangled column, and that recovery is not lossless: values of the form
+    x.0Y collapse, so a true 1.05 reads as 1.5. 26 rows across 19 distinct
+    values are affected. See scripts/pilot_subset.py:audit_target.
+
+    Only the target is touched; split membership is left exactly as committed.
+    """
+    import pandas as pd
+
+    frame = pd.read_csv(csv_path)
+    clean = frame['thalf_hours'].to_numpy(dtype=np.float64)
+    peptides = frame['peptide'].to_numpy()
+    position = raw['source_row'].astype(np.int64) - arm_features.SOURCE_ROW_OFFSET
+    if position.min() < 0 or position.max() >= len(clean):
+        raise ValueError('source_row values fall outside the CSV')
+    # Guard the join rather than trust the offset: a shifted index would swap
+    # targets between rows and still produce plausible numbers.
+    if not (peptides[position] == raw['peptide']).all():
+        raise ValueError('source_row join disagrees with the CSV on peptides')
+    changed = int((np.abs(clean[position] - raw['thalf_hours']) > 1e-9).sum())
+    raw = dict(raw)
+    raw['thalf_hours'] = clean[position]
+    return raw, changed
+
+
 def features_and_target(dataset, epsilon, peptide_length=9, pseudoseq_length=34,
                         encoder=None):
     """Encode features; return features, log target, rows.
@@ -148,7 +176,7 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
                     batch_size, learning_rate, weight_decay, dropout, hidden,
                     validation_fraction, device, arm=arm_features.ONEHOT_ARM,
                     embeddings_dir='embeddings', pooling='flatten',
-                    standardise='auto', prescale=True):
+                    standardise='auto', prescale=True, clean_target_csv=None):
     """Train, early-stop and score one split. Return history and metrics."""
     started = time.monotonic()
     train_file = Path(splits_dir)/f'training_{split_index}.npz'
@@ -157,6 +185,11 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
         train_raw = {key: data[key] for key in data.files}
     with np.load(test_file) as data:
         test_raw = {key: data[key] for key in data.files}
+    target_fixes = 0
+    if clean_target_csv:
+        train_raw, fixed_train = apply_clean_target(train_raw, clean_target_csv)
+        test_raw, fixed_test = apply_clean_target(test_raw, clean_target_csv)
+        target_fixes = fixed_train + fixed_test
 
     rng = np.random.default_rng(seed)
     order = rng.permutation(len(train_raw['source_row']))
@@ -273,7 +306,8 @@ def train_one_split(split_index, splits_dir, *, epsilon, seed, epochs, patience,
                 test=test_metrics, baseline=baseline,
                 test_subsets={name: metrics(y_test[mask], predictions[mask])
                               for name, mask in subsets.items() if mask.any()},
-                history=history, seed=seed, train_seconds=time.monotonic()-started), model
+                history=history, seed=seed, target_fixes=target_fixes,
+                train_seconds=time.monotonic()-started), model
 
 
 def error_bars(values):
@@ -452,7 +486,7 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
         dropout=0.2, hidden=(256, 128), validation_fraction=0.1, splits=5,
         device=None, save_models=True, arm=arm_features.ONEHOT_ARM,
         embeddings_dir='embeddings', pooling='flatten', standardise='auto',
-        prescale=True):
+        prescale=True, clean_target_csv=None):
     """Train one MLP per split, write metrics, figures and optional weights.
 
     arm selects the input representation; everything else is held fixed, so a
@@ -468,7 +502,8 @@ def run(splits_dir='DATA', output_dir='RESULTS', *, epsilon=0.1, seed=0, epochs=
             learning_rate=learning_rate, weight_decay=weight_decay, dropout=dropout,
             hidden=tuple(hidden), validation_fraction=validation_fraction, device=device,
             arm=arm, embeddings_dir=embeddings_dir, pooling=pooling,
-            standardise=standardise, prescale=prescale)
+            standardise=standardise, prescale=prescale,
+            clean_target_csv=clean_target_csv)
         # Tensors, so they belong in the checkpoint and not in metrics.json.
         fitted_state = result.pop('fitted_state')
         if save_models:
@@ -555,6 +590,10 @@ def main():
                         help='flatten (43*D features), mean (2*D, over the peptide and '
                              'HLA blocks) or pca:K (43*K, one D->K projection fitted on '
                              'the training rows; pca:20 matches A0 feature for feature)')
+    parser.add_argument('--clean-target-csv', default=None,
+                        help='Re-read thalf_hours from this uncorrupted CSV, '
+                             'joined on source_row. The committed .npz targets '
+                             'carry the lossy Excel recovery (26 rows wrong).')
     parser.add_argument('--no-prescale', dest='prescale', action='store_false',
                         help='Disable per-dimension standardisation of the cache '
                              'block before pooling. Prescaling is ON by default: '
