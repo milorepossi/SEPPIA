@@ -30,7 +30,10 @@ WORKERS = 4           # concurrent boltz processes per GPU; ~3 GiB each
 CPU = 4.0 * 2.5       # CPU in proportion to workers: each spawns dataloader
                       # threads, and starving them was measured to cost more
                       # than the GPU does
-SHARD_TIMEOUT = 8 * 3600
+# 12 shards keeps each one well inside its timeout even at the pessimistic
+# batch-16 cold rate of 9.7 s/complex: 28166/12 = 2347 rows -> 6.3 h, against
+# 7.3 h for 8 shards and 9.4 h at that rate, which would have been killed.
+SHARD_TIMEOUT = 10 * 3600
 
 image = (
     modal.Image.debian_slim(python_version="3.12")

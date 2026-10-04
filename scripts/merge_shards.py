@@ -36,6 +36,11 @@ def plan(shards: list[Path]) -> tuple[list[tuple[int, int, int]], dict, dict]:
     slots = {idx["n_slots"] for idx in indices}
     if len(slots) != 1:
         raise ValueError(f"shards disagree on n_slots: {slots}")
+    shapes = {name: tuple(shape) for name, shape in indices[0].get("arrays", {}).items()}
+    for idx in indices[1:]:
+        other = {name: tuple(shape) for name, shape in idx.get("arrays", {}).items()}
+        if other != shapes:
+            raise ValueError(f"shards disagree on array shapes: {shapes} vs {other}")
     fps = {idx["fingerprint"] for idx in indices}
     if len(fps) != 1:
         # Different row lists give different fingerprints by design, so this is
@@ -76,10 +81,14 @@ def merge(root, dest, *, dry_run: bool = False) -> dict:
     opened = [{n: np.load(p / n, mmap_mode="r") for n in names} for p in shards]
     out = {}
     for n in names:
-        dim = int(opened[0][n].shape[-1])
+        # Each array keeps its OWN slot count. The 43-slot arms and the
+        # 306-slot boltz_ZRAW derivation source live in the same cache, so
+        # using the index's global n_slots here silently works for the arms and
+        # then fails on ZRAW with a broadcast error.
+        slots, dim = int(opened[0][n].shape[1]), int(opened[0][n].shape[-1])
         out[n] = np.lib.format.open_memmap(
             dest / n, mode="w+", dtype=np.float16,
-            shape=(len(rows), first["n_slots"], dim))
+            shape=(len(rows), slots, dim))
     for k, (_sr, si, pos) in enumerate(rows):
         for n in names:
             out[n][k] = opened[si][n][pos]
