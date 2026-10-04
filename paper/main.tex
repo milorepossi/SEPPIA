@@ -323,8 +323,16 @@ We would rather state these than have them found.
         while every Boltz arm passes through a fitted per-dimension prescaling
         and a fitted feature standardiser with clipping. One-hot is already
         unit-scale, which is the rationale, but it means the budget-matched
-        comparison is not a pure representation swap. A standardised one-hot
-        control is required and is not yet reported here.
+        comparison is not a pure representation swap. We ran the control:
+        putting the baseline through the standardiser moves it from
+        $0.7687 \pm 0.0217$ to $0.7742 \pm 0.0161$, a paired gain of
+        $+0.0055$ winning 3 of \nsplits{} splits. The asymmetry is therefore
+        worth roughly a tenth of the \bzzupcadelta{} it was feared to explain,
+        and the headline survives it. Two caveats: this control ran against the
+        uncorrected target, so it is a within-baseline paired comparison rather
+        than a drop-in replacement for the reference row; and its
+        \texttt{never} arm reproduces the committed baseline to $0.002$, which
+        is itself a useful bound on environment-to-environment drift.
   \item \textbf{\texttt{flatten} is a capacity comparison.} In
         Table~\ref{tab:flatten} the Boltz arms carry up to 22{,}016 features
         against the baseline's 860, and correspondingly more first-layer
