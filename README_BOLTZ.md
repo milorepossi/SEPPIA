@@ -9,7 +9,8 @@ Start here:
 
 | Document | What it covers |
 |---|---|
-| **[`MODAL_BENCHMARK.md`](MODAL_BENCHMARK.md)** | best GPU, nine-card cost sweep, fine-tuning feasibility — **read first** |
+| **[`docs/06_boltz2_ladder_results.md`](docs/06_boltz2_ladder_results.md)** | **Full ladder results across all arms and poolings — READ THIS FIRST** |
+| [`MODAL_BENCHMARK.md`](MODAL_BENCHMARK.md) | best GPU, nine-card cost sweep, fine-tuning feasibility |
 | [`BENCHMARK.md`](BENCHMARK.md) | the earlier Hugging Face measurement on a $20 budget |
 | [`docs/04_boltz2_arm.md`](docs/04_boltz2_arm.md) | the method, assertions and failure modes |
 
@@ -251,8 +252,13 @@ binder of ≤128 atoms, and affinity training dropped ligands above 50 heavy
 atoms, while these 9-mers are 48-100 (median 75). Hence a custom head on the
 trunk, following PreFold-dG (PMID 42635209).
 
-## Interpreting a B-arm number
+## Full dataset results
 
-B arms see 2,814 rows; A0-A3 saw all 28,166. **A B-arm loss is not evidence
-about Boltz-2 until A0 is re-scored on the pilot rows only.** That re-scoring is
-CPU-only and free, and must be reported alongside.
+The full 28,166 complexes were extracted on Modal and scored across all five splits.
+Arm **`BZZU`** (uniform interface pair contraction) decisively beats the A0 one-hot baseline:
+- `BZZU (pca:20)`: **0.8210 ± 0.0175** vs A0 0.7667 (**+0.0543**, wins 5/5 splits)
+- `BZZU (flatten)`: **0.8361 ± 0.0154** vs A0 0.7667 (**+0.0694**, wins 5/5 splits)
+- `BZZU (mean)`: **0.7765 ± 0.0091** vs A0 0.7667 (**+0.0098**, wins 4/5 splits)
+
+Full report, tables, and subset generalization analysis: [`docs/06_boltz2_ladder_results.md`](docs/06_boltz2_ladder_results.md).
+

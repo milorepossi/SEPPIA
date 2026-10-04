@@ -113,6 +113,39 @@ def _spearman(report: dict):
             statistics.stdev(values) if len(values) > 1 else 0.0)
 
 
+@app.function(image=image, volumes={"/cache": cache}, timeout=10800, cpu=1.0)
+def ladder_all(cache_dir: str, arms: list[str], poolings: list[str],
+               prescale: bool, clean_target: bool, seed: int,
+               skip_combined: bool) -> str:
+    """Orchestrate the whole ladder **server-side**, fanning out with .map.
+
+    This has to be a remote function rather than a local entrypoint. A local
+    entrypoint holds the app open with a heartbeat, so when the client
+    disconnects -- which a long tool call does -- Modal stops the app mid-run
+    with `App state is APP_STATE_STOPPED`. Orchestrating from inside means the
+    run survives the client going away, and every arm's metrics.json is written
+    to the volume as it finishes, so results are recoverable even if this
+    function is itself interrupted.
+    """
+    summary = {"cache_dir": cache_dir, "arms": arms, "poolings": poolings,
+               "prescale": prescale, "clean_target": clean_target, "seed": seed}
+    if not skip_combined:
+        summary["combined"] = json.loads(build_combined.local(cache_dir))
+
+    jobs = [(a, p, cache_dir, prescale, clean_target, seed)
+            for p in poolings for a in arms]
+    results = {}
+    for (a, p, *_), raw in zip(jobs, score_arm.map(*zip(*jobs))):
+        results[f"{a}|{p}"] = json.loads(raw)
+    summary["results"] = results
+
+    out = pathlib.Path("/cache/RESULTS/ladder_boltz.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(summary, indent=2) + "\n")
+    cache.commit()
+    return json.dumps(summary)
+
+
 @app.local_entrypoint()
 def ladder(cache_dir: str = "/cache/boltz_full",
            arms: str = "onehot,BZP,BZZ,BZZU,BZS,BZSZ",
@@ -120,25 +153,18 @@ def ladder(cache_dir: str = "/cache/boltz_full",
            prescale: bool = True, clean_target: bool = True, seed: int = 0,
            skip_combined: bool = False,
            out: str = "RESULTS/ladder_boltz.json"):
-    if not skip_combined:
-        print("building BZSZ ...", flush=True)
-        built = json.loads(build_combined.remote(cache_dir))
-        print(json.dumps(built, indent=2), flush=True)
-
     arm_list = [a.strip() for a in arms.split(",") if a.strip()]
     pool_list = [p.strip() for p in poolings.split(",") if p.strip()]
-    jobs = {(a, p): score_arm.spawn(a, p, cache_dir, prescale, clean_target, seed)
-            for p in pool_list for a in arm_list}
-    print(f"launched {len(jobs)} runs: {len(arm_list)} arms x {len(pool_list)} poolings",
+    print(f"orchestrating server-side: {len(arm_list)} arms x {len(pool_list)} poolings",
           flush=True)
-
-    results = {}
-    for (a, p), handle in jobs.items():
-        try:
-            payload = json.loads(handle.get())
-        except Exception as exc:
-            payload = {"arm": a, "pooling": p, "error": f"{type(exc).__name__}: {exc}"}
-        results[f"{a}|{p}"] = payload
+    summary = json.loads(ladder_all.remote(cache_dir, arm_list, pool_list,
+                                           prescale, clean_target, seed,
+                                           skip_combined))
+    if "combined" in summary:
+        print(json.dumps(summary["combined"], indent=2), flush=True)
+    results = summary["results"]
+    for key, payload in results.items():
+        a, p = key.split("|")
         if payload.get("error"):
             print(f"  {a:7s} {p:9s} ERROR {payload['error']}", flush=True)
         else:
