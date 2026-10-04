@@ -1,0 +1,34 @@
+{
+  "metric": "Anchor-Weighted BLOSUM62",
+  "tau_threshold": 7.0,
+  "total_samples": 28166,
+  "total_peptides": 5633,
+  "total_clusters": 5394,
+  "multi_peptide_clusters": 195,
+  "max_cluster_size": 9,
+  "train": {
+    "samples": 22532,
+    "pct_samples": 79.99715969608748,
+    "peptides": 3323,
+    "binder_pct": 51.903958814131016,
+    "zero_pct": 20.38878040120717,
+    "alleles": 75
+  },
+  "val": {
+    "samples": 2816,
+    "pct_samples": 9.997869772065611,
+    "peptides": 1153,
+    "binder_pct": 52.02414772727273,
+    "zero_pct": 19.176136363636363,
+    "alleles": 63
+  },
+  "test": {
+    "samples": 2818,
+    "pct_samples": 10.004970531846908,
+    "peptides": 1157,
+    "binder_pct": 52.022711142654366,
+    "zero_pct": 19.339957416607522,
+    "alleles": 65
+  },
+  "min_test_train_aw_blosum_dist": 7.090693950653076
+}
