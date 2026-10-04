@@ -1,0 +1,121 @@
+{
+  "target_audit": {
+    "n_rows": 28166,
+    "n_disagreeing": 26,
+    "fraction_disagreeing": 0.000923,
+    "distinct_values_csv": 944,
+    "distinct_values_recovered": 925,
+    "max_abs_error": 0.8100000000000005,
+    "affected_source_rows": [
+      295,
+      1920,
+      2269,
+      2348,
+      3005,
+      3496,
+      3533,
+      5287,
+      5457,
+      6968,
+      6972,
+      8460,
+      13473,
+      13661,
+      13867,
+      13907,
+      15479,
+      16331,
+      18040,
+      19408,
+      20048,
+      22258,
+      24749,
+      25807,
+      26093,
+      28078
+    ],
+    "examples": [
+      {
+        "source_row": 295,
+        "truth": 1.05,
+        "recovered": 1.5
+      },
+      {
+        "source_row": 1920,
+        "truth": 8.05,
+        "recovered": 8.5
+      },
+      {
+        "source_row": 2269,
+        "truth": 1.05,
+        "recovered": 1.5
+      },
+      {
+        "source_row": 2348,
+        "truth": 5.05,
+        "recovered": 5.5
+      },
+      {
+        "source_row": 3005,
+        "truth": 8.05,
+        "recovered": 8.5
+      },
+      {
+        "source_row": 3496,
+        "truth": 1.05,
+        "recovered": 1.5
+      },
+      {
+        "source_row": 3533,
+        "truth": 1.05,
+        "recovered": 1.5
+      },
+      {
+        "source_row": 5287,
+        "truth": 2.05,
+        "recovered": 2.5
+      },
+      {
+        "source_row": 5457,
+        "truth": 7.05,
+        "recovered": 7.5
+      },
+      {
+        "source_row": 6968,
+        "truth": 1.05,
+        "recovered": 1.5
+      }
+    ],
+    "pattern": "true values of the form x.0Y recover as x.Y (leading zero of the hundredths place is lost)",
+    "conclusion": "the CSV is ground truth; split membership is unaffected"
+  },
+  "subset": {
+    "n_complexes": 2814,
+    "n_alleles": 28,
+    "n_unique_hla_seq": 28,
+    "n_unique_peptides": 2122,
+    "loci": {
+      "B": 1457,
+      "A": 1357
+    },
+    "rows_per_allele": {
+      "min": 16,
+      "median": 110,
+      "max": 110
+    },
+    "target": {
+      "zeros": 505,
+      "zero_fraction": 0.1795,
+      "median": 1.2,
+      "p90": 15.7,
+      "max": 208.5
+    },
+    "full_dataset_zero_fraction": 0.2016,
+    "covers_all_test_exclusive_hla": true
+  },
+  "parameters": {
+    "n_alleles": 28,
+    "per_allele": 110,
+    "seed": 0
+  }
+}

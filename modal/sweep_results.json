@@ -1,0 +1,745 @@
+{
+  "L4": {
+    "gpu": "L4",
+    "facts": {
+      "torch": "2.14.1+cu130",
+      "cuda": true,
+      "device": "NVIDIA L4",
+      "memory_GiB": 22.0,
+      "capability": "8.9",
+      "sm80_plus": true,
+      "bf16": true,
+      "sms": 58,
+      "cuequivariance": true
+    },
+    "price_per_hour": 0.7992,
+    "runs": [
+      {
+        "tag": "c1",
+        "n_requested": 6,
+        "n_produced": 6,
+        "n_per_worker": 6,
+        "concurrency": 1,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 86.22,
+        "ok": true,
+        "peak_device_MiB": 2820,
+        "seconds_per_complex": 14.37
+      },
+      {
+        "tag": "c2",
+        "n_requested": 12,
+        "n_produced": 12,
+        "n_per_worker": 6,
+        "concurrency": 2,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 102.37,
+        "ok": true,
+        "peak_device_MiB": 5635,
+        "seconds_per_complex": 8.531
+      },
+      {
+        "tag": "c4",
+        "n_requested": 24,
+        "n_produced": 24,
+        "n_per_worker": 6,
+        "concurrency": 4,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 147.4,
+        "ok": true,
+        "peak_device_MiB": 11267,
+        "seconds_per_complex": 6.142
+      }
+    ],
+    "warmup": {
+      "tag": "warm",
+      "n_requested": 2,
+      "n_produced": 2,
+      "n_per_worker": 2,
+      "concurrency": 1,
+      "sampling_steps": 10,
+      "recycling_steps": 0,
+      "kernels": true,
+      "wall_seconds": 80.61,
+      "ok": true,
+      "peak_device_MiB": 2820,
+      "seconds_per_complex": 40.303
+    },
+    "kernels_used": true,
+    "best": {
+      "concurrency": 4,
+      "seconds_per_complex": 6.142,
+      "dollars_per_complex": 0.001364,
+      "cost_full_28166": 38.41,
+      "hours_full_28166": 48.05
+    }
+  },
+  "A10G": {
+    "gpu": "A10G",
+    "facts": {
+      "torch": "2.14.1+cu130",
+      "cuda": true,
+      "device": "NVIDIA A10G",
+      "memory_GiB": 22.1,
+      "capability": "8.6",
+      "sm80_plus": true,
+      "bf16": true,
+      "sms": 80,
+      "cuequivariance": true
+    },
+    "price_per_hour": 1.1016,
+    "runs": [
+      {
+        "tag": "c1",
+        "n_requested": 6,
+        "n_produced": 6,
+        "n_per_worker": 6,
+        "concurrency": 1,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 69.23,
+        "ok": true,
+        "peak_device_MiB": 2899,
+        "seconds_per_complex": 11.538
+      },
+      {
+        "tag": "c2",
+        "n_requested": 12,
+        "n_produced": 12,
+        "n_per_worker": 6,
+        "concurrency": 2,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 84.47,
+        "ok": true,
+        "peak_device_MiB": 5794,
+        "seconds_per_complex": 7.039
+      },
+      {
+        "tag": "c4",
+        "n_requested": 24,
+        "n_produced": 24,
+        "n_per_worker": 6,
+        "concurrency": 4,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 114.09,
+        "ok": true,
+        "peak_device_MiB": 11587,
+        "seconds_per_complex": 4.754
+      }
+    ],
+    "warmup": {
+      "tag": "warm",
+      "n_requested": 2,
+      "n_produced": 2,
+      "n_per_worker": 2,
+      "concurrency": 1,
+      "sampling_steps": 10,
+      "recycling_steps": 0,
+      "kernels": true,
+      "wall_seconds": 67.84,
+      "ok": true,
+      "peak_device_MiB": 2899,
+      "seconds_per_complex": 33.92
+    },
+    "kernels_used": true,
+    "best": {
+      "concurrency": 4,
+      "seconds_per_complex": 4.754,
+      "dollars_per_complex": 0.001455,
+      "cost_full_28166": 40.97,
+      "hours_full_28166": 37.19
+    }
+  },
+  "L40S": {
+    "gpu": "L40S",
+    "facts": {
+      "torch": "2.14.1+cu130",
+      "cuda": true,
+      "device": "NVIDIA L40S",
+      "memory_GiB": 44.4,
+      "capability": "8.9",
+      "sm80_plus": true,
+      "bf16": true,
+      "sms": 142,
+      "cuequivariance": true
+    },
+    "price_per_hour": 1.9512,
+    "runs": [
+      {
+        "tag": "c1",
+        "n_requested": 6,
+        "n_produced": 6,
+        "n_per_worker": 6,
+        "concurrency": 1,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 60.03,
+        "ok": true,
+        "peak_device_MiB": 3101,
+        "seconds_per_complex": 10.005
+      },
+      {
+        "tag": "c2",
+        "n_requested": 12,
+        "n_produced": 12,
+        "n_per_worker": 6,
+        "concurrency": 2,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 61.33,
+        "ok": true,
+        "peak_device_MiB": 6198,
+        "seconds_per_complex": 5.111
+      },
+      {
+        "tag": "c4",
+        "n_requested": 24,
+        "n_produced": 24,
+        "n_per_worker": 6,
+        "concurrency": 4,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 72.19,
+        "ok": true,
+        "peak_device_MiB": 12395,
+        "seconds_per_complex": 3.008
+      }
+    ],
+    "warmup": {
+      "tag": "warm",
+      "n_requested": 2,
+      "n_produced": 2,
+      "n_per_worker": 2,
+      "concurrency": 1,
+      "sampling_steps": 10,
+      "recycling_steps": 0,
+      "kernels": true,
+      "wall_seconds": 59.0,
+      "ok": true,
+      "peak_device_MiB": 3101,
+      "seconds_per_complex": 29.501
+    },
+    "kernels_used": true,
+    "best": {
+      "concurrency": 4,
+      "seconds_per_complex": 3.008,
+      "dollars_per_complex": 0.00163,
+      "cost_full_28166": 45.92,
+      "hours_full_28166": 23.53
+    }
+  },
+  "A100-40GB": {
+    "gpu": "A100-40GB",
+    "facts": {
+      "torch": "2.14.1+cu130",
+      "cuda": true,
+      "device": "NVIDIA A100-SXM4-40GB",
+      "memory_GiB": 39.5,
+      "capability": "8.0",
+      "sm80_plus": true,
+      "bf16": true,
+      "sms": 108,
+      "cuequivariance": true
+    },
+    "price_per_hour": 2.0988,
+    "runs": [
+      {
+        "tag": "c1",
+        "n_requested": 6,
+        "n_produced": 6,
+        "n_per_worker": 6,
+        "concurrency": 1,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 62.61,
+        "ok": true,
+        "peak_device_MiB": 3097,
+        "seconds_per_complex": 10.435
+      },
+      {
+        "tag": "c2",
+        "n_requested": 12,
+        "n_produced": 12,
+        "n_per_worker": 6,
+        "concurrency": 2,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 72.2,
+        "ok": true,
+        "peak_device_MiB": 6191,
+        "seconds_per_complex": 6.017
+      },
+      {
+        "tag": "c4",
+        "n_requested": 24,
+        "n_produced": 24,
+        "n_per_worker": 6,
+        "concurrency": 4,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 92.01,
+        "ok": true,
+        "peak_device_MiB": 12380,
+        "seconds_per_complex": 3.834
+      }
+    ],
+    "warmup": {
+      "tag": "warm",
+      "n_requested": 2,
+      "n_produced": 2,
+      "n_per_worker": 2,
+      "concurrency": 1,
+      "sampling_steps": 10,
+      "recycling_steps": 0,
+      "kernels": true,
+      "wall_seconds": 62.41,
+      "ok": true,
+      "peak_device_MiB": 3097,
+      "seconds_per_complex": 31.207
+    },
+    "kernels_used": true,
+    "best": {
+      "concurrency": 4,
+      "seconds_per_complex": 3.834,
+      "dollars_per_complex": 0.002235,
+      "cost_full_28166": 62.96,
+      "hours_full_28166": 30.0
+    }
+  },
+  "A100-80GB": {
+    "gpu": "A100-80GB",
+    "facts": {
+      "torch": "2.14.1+cu130",
+      "cuda": true,
+      "device": "NVIDIA A100-SXM4-80GB",
+      "memory_GiB": 79.3,
+      "capability": "8.0",
+      "sm80_plus": true,
+      "bf16": true,
+      "sms": 108,
+      "cuequivariance": true
+    },
+    "price_per_hour": 2.4984,
+    "runs": [
+      {
+        "tag": "c1",
+        "n_requested": 6,
+        "n_produced": 6,
+        "n_per_worker": 6,
+        "concurrency": 1,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 68.58,
+        "ok": true,
+        "peak_device_MiB": 3097,
+        "seconds_per_complex": 11.43
+      },
+      {
+        "tag": "c2",
+        "n_requested": 12,
+        "n_produced": 12,
+        "n_per_worker": 6,
+        "concurrency": 2,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 78.13,
+        "ok": true,
+        "peak_device_MiB": 6191,
+        "seconds_per_complex": 6.511
+      },
+      {
+        "tag": "c4",
+        "n_requested": 24,
+        "n_produced": 24,
+        "n_per_worker": 6,
+        "concurrency": 4,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 90.24,
+        "ok": true,
+        "peak_device_MiB": 12380,
+        "seconds_per_complex": 3.76
+      }
+    ],
+    "warmup": {
+      "tag": "warm",
+      "n_requested": 2,
+      "n_produced": 2,
+      "n_per_worker": 2,
+      "concurrency": 1,
+      "sampling_steps": 10,
+      "recycling_steps": 0,
+      "kernels": true,
+      "wall_seconds": 64.4,
+      "ok": true,
+      "peak_device_MiB": 3097,
+      "seconds_per_complex": 32.201
+    },
+    "kernels_used": true,
+    "best": {
+      "concurrency": 4,
+      "seconds_per_complex": 3.76,
+      "dollars_per_complex": 0.002609,
+      "cost_full_28166": 73.5,
+      "hours_full_28166": 29.42
+    }
+  },
+  "H100": {
+    "gpu": "H100",
+    "facts": {
+      "torch": "2.14.1+cu130",
+      "cuda": true,
+      "device": "NVIDIA H100 80GB HBM3",
+      "memory_GiB": 79.2,
+      "capability": "9.0",
+      "sm80_plus": true,
+      "bf16": true,
+      "sms": 132,
+      "cuequivariance": true
+    },
+    "price_per_hour": 3.9492,
+    "runs": [
+      {
+        "tag": "c1",
+        "n_requested": 6,
+        "n_produced": 6,
+        "n_per_worker": 6,
+        "concurrency": 1,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 52.22,
+        "ok": true,
+        "peak_device_MiB": 3369,
+        "seconds_per_complex": 8.703
+      },
+      {
+        "tag": "c2",
+        "n_requested": 12,
+        "n_produced": 12,
+        "n_per_worker": 6,
+        "concurrency": 2,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 54.16,
+        "ok": true,
+        "peak_device_MiB": 6735,
+        "seconds_per_complex": 4.513
+      },
+      {
+        "tag": "c4",
+        "n_requested": 24,
+        "n_produced": 24,
+        "n_per_worker": 6,
+        "concurrency": 4,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 65.45,
+        "ok": true,
+        "peak_device_MiB": 13468,
+        "seconds_per_complex": 2.727
+      },
+      {
+        "tag": "c8",
+        "n_requested": 48,
+        "n_produced": 48,
+        "n_per_worker": 6,
+        "concurrency": 8,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 97.55,
+        "ok": true,
+        "peak_device_MiB": 26932,
+        "seconds_per_complex": 2.032
+      }
+    ],
+    "warmup": {
+      "tag": "warm",
+      "n_requested": 2,
+      "n_produced": 2,
+      "n_per_worker": 2,
+      "concurrency": 1,
+      "sampling_steps": 10,
+      "recycling_steps": 0,
+      "kernels": true,
+      "wall_seconds": 48.4,
+      "ok": true,
+      "peak_device_MiB": 3369,
+      "seconds_per_complex": 24.201
+    },
+    "kernels_used": true,
+    "best": {
+      "concurrency": 8,
+      "seconds_per_complex": 2.032,
+      "dollars_per_complex": 0.002229,
+      "cost_full_28166": 62.78,
+      "hours_full_28166": 15.9
+    }
+  },
+  "H200": {
+    "gpu": "H200",
+    "facts": {
+      "torch": "2.14.1+cu130",
+      "cuda": true,
+      "device": "NVIDIA H200",
+      "memory_GiB": 139.8,
+      "capability": "9.0",
+      "sm80_plus": true,
+      "bf16": true,
+      "sms": 132,
+      "cuequivariance": true
+    },
+    "price_per_hour": 4.5396,
+    "runs": [
+      {
+        "tag": "c1",
+        "n_requested": 6,
+        "n_produced": 6,
+        "n_per_worker": 6,
+        "concurrency": 1,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 58.63,
+        "ok": true,
+        "peak_device_MiB": 3369,
+        "seconds_per_complex": 9.772
+      },
+      {
+        "tag": "c2",
+        "n_requested": 12,
+        "n_produced": 12,
+        "n_per_worker": 6,
+        "concurrency": 2,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 60.78,
+        "ok": true,
+        "peak_device_MiB": 6735,
+        "seconds_per_complex": 5.065
+      },
+      {
+        "tag": "c4",
+        "n_requested": 24,
+        "n_produced": 24,
+        "n_per_worker": 6,
+        "concurrency": 4,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 71.61,
+        "ok": true,
+        "peak_device_MiB": 13468,
+        "seconds_per_complex": 2.984
+      },
+      {
+        "tag": "c8",
+        "n_requested": 48,
+        "n_produced": 48,
+        "n_per_worker": 6,
+        "concurrency": 8,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 94.35,
+        "ok": true,
+        "peak_device_MiB": 26932,
+        "seconds_per_complex": 1.966
+      }
+    ],
+    "warmup": {
+      "tag": "warm",
+      "n_requested": 2,
+      "n_produced": 2,
+      "n_per_worker": 2,
+      "concurrency": 1,
+      "sampling_steps": 10,
+      "recycling_steps": 0,
+      "kernels": true,
+      "wall_seconds": 55.48,
+      "ok": true,
+      "peak_device_MiB": 3369,
+      "seconds_per_complex": 27.742
+    },
+    "kernels_used": true,
+    "best": {
+      "concurrency": 8,
+      "seconds_per_complex": 1.966,
+      "dollars_per_complex": 0.002479,
+      "cost_full_28166": 69.83,
+      "hours_full_28166": 15.38
+    }
+  },
+  "B200": {
+    "gpu": "B200",
+    "facts": {
+      "torch": "2.14.1+cu130",
+      "cuda": true,
+      "device": "NVIDIA B200",
+      "memory_GiB": 178.4,
+      "capability": "10.0",
+      "sm80_plus": true,
+      "bf16": true,
+      "sms": 148,
+      "cuequivariance": true
+    },
+    "price_per_hour": 6.2496,
+    "runs": [
+      {
+        "tag": "c1",
+        "n_requested": 6,
+        "n_produced": 6,
+        "n_per_worker": 6,
+        "concurrency": 1,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 53.43,
+        "ok": true,
+        "peak_device_MiB": 3472,
+        "seconds_per_complex": 8.905
+      },
+      {
+        "tag": "c2",
+        "n_requested": 12,
+        "n_produced": 12,
+        "n_per_worker": 6,
+        "concurrency": 2,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 56.01,
+        "ok": true,
+        "peak_device_MiB": 6938,
+        "seconds_per_complex": 4.668
+      },
+      {
+        "tag": "c4",
+        "n_requested": 24,
+        "n_produced": 24,
+        "n_per_worker": 6,
+        "concurrency": 4,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 65.67,
+        "ok": true,
+        "peak_device_MiB": 13872,
+        "seconds_per_complex": 2.736
+      },
+      {
+        "tag": "c8",
+        "n_requested": 48,
+        "n_produced": 48,
+        "n_per_worker": 6,
+        "concurrency": 8,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 86.48,
+        "ok": true,
+        "peak_device_MiB": 27740,
+        "seconds_per_complex": 1.802
+      }
+    ],
+    "warmup": {
+      "tag": "warm",
+      "n_requested": 2,
+      "n_produced": 2,
+      "n_per_worker": 2,
+      "concurrency": 1,
+      "sampling_steps": 10,
+      "recycling_steps": 0,
+      "kernels": true,
+      "wall_seconds": 55.09,
+      "ok": true,
+      "peak_device_MiB": 3472,
+      "seconds_per_complex": 27.546
+    },
+    "kernels_used": true,
+    "best": {
+      "concurrency": 8,
+      "seconds_per_complex": 1.802,
+      "dollars_per_complex": 0.003128,
+      "cost_full_28166": 88.11,
+      "hours_full_28166": 14.1
+    }
+  },
+  "T4": {
+    "gpu": "T4",
+    "facts": {
+      "torch": "2.14.1+cu130",
+      "cuda": true,
+      "device": "Tesla T4",
+      "memory_GiB": 14.6,
+      "capability": "7.5",
+      "sm80_plus": false,
+      "bf16": true,
+      "sms": 40,
+      "cuequivariance": true
+    },
+    "price_per_hour": 0.5904,
+    "runs": [
+      {
+        "tag": "c1",
+        "n_requested": 6,
+        "n_produced": 6,
+        "n_per_worker": 6,
+        "concurrency": 1,
+        "sampling_steps": 10,
+        "recycling_steps": 3,
+        "kernels": true,
+        "wall_seconds": 158.23,
+        "ok": true,
+        "peak_device_MiB": 2899,
+        "seconds_per_complex": 26.371
+      }
+    ],
+    "warmup": {
+      "tag": "warm",
+      "n_requested": 2,
+      "n_produced": 2,
+      "n_per_worker": 2,
+      "concurrency": 1,
+      "sampling_steps": 10,
+      "recycling_steps": 0,
+      "kernels": true,
+      "wall_seconds": 95.88,
+      "ok": true,
+      "peak_device_MiB": 2899,
+      "seconds_per_complex": 47.939
+    },
+    "kernels_used": true,
+    "best": {
+      "concurrency": 1,
+      "seconds_per_complex": 26.371,
+      "dollars_per_complex": 0.004325,
+      "cost_full_28166": 121.81,
+      "hours_full_28166": 206.32
+    }
+  }
+}

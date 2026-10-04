@@ -1,0 +1,37 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{llrrrr}
+\toprule
+Representation & Feat. & Spearman $\rho$ & RMSE & Unseen-HLA & $\Delta\rho$ (won) \\
+\midrule
+A0 one-hot & 860 & $0.767 \pm 0.018$ & 1.172 & 1.643 & reference \\
+\armbzs{} single $s$ & 860 & $0.747 \pm 0.023$ & 1.203 & 1.583 & -0.0194 (0/5) \\
+\armbzz{} pair, $1/d^2$ & 860 & $0.748 \pm 0.012$ & 1.207 & 1.450 & -0.0191 (0/5) \\
+\armbzsz{} single $+$ pair & 860 & $0.765 \pm 0.014$ & 1.165 & 1.451 & -0.0017 (3/5) \\
+\bfseries \armbzzu{} pair, uniform & 860 & $0.821 \pm 0.017$ & 1.036 & 1.365 & +0.0543 (5/5) \\
+\bottomrule
+\end{tabular}
+\caption{Budget-matched comparison (\texttt{pca:20}). Every arm is compressed to 860 features, so the regression head is byte-identical across rows and only the input representation differs. RMSE is in log units; Unseen-HLA is RMSE restricted to test rows whose allele does not appear in training. $\Delta\rho$ is paired split by split against A0.}
+\label{tab:pca20}
+\vspace{2pt}\footnotesize Mean $\pm$ SD over \nsplits{} splits, one seed per split; the SD is split spread, not seed spread (\S\ref{sec:limits}).
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{llrrrr}
+\toprule
+Representation & Feat. & Spearman $\rho$ & RMSE & Unseen-HLA & $\Delta\rho$ (won) \\
+\midrule
+A0 one-hot & 860 & $0.767 \pm 0.018$ & 1.172 & 1.643 & reference \\
+\armbzs{} single $s$ & 16512 & $0.786 \pm 0.021$ & 1.120 & 1.507 & +0.0188 (5/5) \\
+\armbzz{} pair, $1/d^2$ & 5504 & $0.782 \pm 0.013$ & 1.132 & 1.379 & +0.0157 (4/5) \\
+\armbzsz{} single $+$ pair & 22016 & $0.805 \pm 0.013$ & 1.072 & 1.395 & +0.0378 (5/5) \\
+\bfseries \armbzzu{} pair, uniform & 5504 & $0.836 \pm 0.015$ & 0.992 & 1.292 & +0.0694 (5/5) \\
+\bottomrule
+\end{tabular}
+\caption{Uncompressed comparison (\texttt{flatten}). This row set is \emph{not} budget-matched: the Boltz arms carry more features, and hence more first-layer parameters, than A0. It bounds what the compression in Table~\ref{tab:pca20} costs, and is not evidence about representation quality on its own.}
+\label{tab:flatten}
+\vspace{2pt}\footnotesize Mean $\pm$ SD over \nsplits{} splits, one seed per split.
+\end{table}
