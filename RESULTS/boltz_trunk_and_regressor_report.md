@@ -59,7 +59,25 @@ Standard transformer self-attention is permutation-invariant and lacks inherent 
    $$\text{Attention}(Q, K, V)_{ij} = \text{Softmax}\left(\frac{q_i k_j^\top}{\sqrt{d}} + \mathbf{W}_z z_{ij}\right) v_j$$
 4. **Recycling Iterations:** Co-folded structures and pair states are recycled through the trunk multiple times, refining the non-covalent interface until spatial equilibrium is reached.
 
-### 1.3 Trunk Outputs
+### 1.3 How MSAs Play into Pair Representations ($z$) vs. Our Single-Sequence Mode
+
+#### Architectural Mechanism: MSA-to-Pair Outer Product
+In the complete AlphaFold3 and Boltz-2 architectures, Multiple Sequence Alignments (MSAs) play a direct mathematical role in initializing and updating the pair representation $z_{ij}$. An MSA matrix $\mathbf{M} \in \mathbb{R}^{N_{\text{seq}} \times L \times c_m}$ represents $N_{\text{seq}}$ evolutionary homologues across the sequence length $L$. Across MSA processing blocks, an **outer-product mean** projects residue pairs from the alignment:
+$$\Delta z_{ij} = \frac{1}{N_{\text{seq}}} \sum_{s=1}^{N_{\text{seq}}} \left( \mathbf{W}_a m_{s, i} \right) \otimes \left( \mathbf{W}_b m_{s, j} \right)$$
+which is linearly projected and added to the pair tensor:
+$$z_{ij} \leftarrow z_{ij} + \mathbf{W}_{\text{out}} \Delta z_{ij}$$
+This operation injects **evolutionary co-variation**: if positions $i$ and $j$ mutate in tandem across evolutionary history to preserve a salt bridge or hydrophobic contact, the outer product produces a correlated spike in $z_{ij}$, informing the Pairformer that residues $i$ and $j$ are in direct 3D physical contact.
+
+#### Empirical Setup: Single-Sequence Mode (`msa: empty`)
+In our high-throughput extraction pipeline across all 28,166 pMHC complexes, **MSAs were explicitly disabled (`msa: empty`) for both the peptide and the HLA chain**. The model was run strictly in **single-sequence mode**. This choice was made for three critical reasons:
+1. **Peptide 9-mers lack evolutionary depth:** A 9-amino-acid antigen fragment has no meaningful phylogenetic tree. Querying sequence databases for 9-mers yields either trivial identical hits or spurious matches, providing zero evolutionary covariation signal while creating massive server overhead.
+2. **Absence of paired interchain MSAs:** Crucially, pMHC stability is an *interchain* phenomenon between a host receptor and an arbitrary (often pathogen- or tumor-derived) peptide. Because peptide and HLA are not co-transcribed or conserved across species as a linked gene pair, MSA servers cannot construct a *jointly paired* alignment. An unpaired HLA alignment only provides intra-HLA conservation; it cannot seed the critical $9 \times 34$ interchain contact block with co-evolutionary signals.
+3. **Computational throughput:** Querying remote MSA servers for 28,166 complexes would require days of network latency, dominating runtime by $>95\%$, whereas single-sequence GPU forward passes took only $\sim 0.08$ seconds per complex on an NVIDIA L40S.
+
+#### Key Scientific Implication
+Because Boltz-2 was run with `msa: empty`, **its superior performance ($\rho = 0.864$ IID, $\rho = 0.785$ Novel Allele) does NOT rely on evolutionary homology lookups or sequence databases**. The pair tensor $z_{ij}$ is synthesized entirely *de novo* from sequence tokens, iterative recycling, and the Pairformer's internalized biophysical constraints (stereochemistry, steric packing, and triangular geometric propagation). Boltz-2 functions here as an **ab initio biophysical engine**, not an alignment retriever.
+
+### 1.4 Trunk Outputs
 At the terminus of the trunk, Boltz-2 produces:
 - $s \in \mathbb{R}^{191 \times 384}$: Contextual per-residue embeddings.
 - $z \in \mathbb{R}^{191 \times 191 \times 128}$: Full inter- and intra-chain pair tensor.
@@ -188,6 +206,8 @@ To understand the superior performance of the Boltz-2 structural arm over classi
    - When compressed via PCA to 860 inputs (`BZZU pca:20`), Boltz-2 shares the exact first-layer width and parameter count of Baseline A0 (860 one-hot inputs). It still achieved $\rho = 0.8597$ on IID ($+0.0375$ over A0) and $\rho = 0.7565$ on Novel Allele ($+0.1033$ over A0), proving the advantage is representational, not capacity-driven.
 5. **Fact 5: Tree-based partitioning on one-hot features completely fails.**
    - One-Hot XGBoost yielded $\rho \approx 0.03$ across all splits, whereas a 2-layer MLP on the identical inputs achieved $\rho = 0.8222$, demonstrating that additive continuous projections are mandatory to capture distributed pocket signals.
+6. **Fact 6: Boltz-2 achieves state-of-the-art results strictly in single-sequence mode (`msa: empty`).**
+   - All 28,166 complexes across all 5 evaluation splits were processed without multiple sequence alignments for either chain. The performance gain is driven entirely by learned structural chemistry, iterative recycling, and triangular geometric propagation—not by database homology lookups.
 
 ### 4.2 Biophysical Hypotheses (Mechanistic & Theoretical Explanations)
 
@@ -215,6 +235,7 @@ To understand the superior performance of the Boltz-2 structural arm over classi
 1. **End-to-End Trunk LoRA Fine-Tuning:** Rather than keeping the Pairformer frozen, applying Low-Rank Adaptation (LoRA) to trunk projection layers trained directly against kinetic dissociation loss would optimize the pair representation specifically for kinetic stability rather than static equilibrium structure.
 2. **2D Interface Cross-Attention Head:** Replacing 1D slot contraction with direct cross-attention over the raw $9 \times 34 = 306$ pair block (`boltz_ZRAW.npy`) would enable the downstream head to learn non-linear spatial attention maps.
 3. **Ternary pMHC–TCR Complex Modeling:** Extending the pipeline to ternary complexes (HLA + peptide + T-cell receptor $\alpha/\beta$ chains) will allow joint prediction of pMHC complex half-life and TCR dwell time, unlocking accurate immunogenicity prediction for neoantigen immunotherapy.
+4. **Pre-computed Offline HLA MSAs:** While peptide MSAs are biologically uninformative and computationally prohibitive, generating deep alignments once for the 75 unique HLA sequences offline is computationally trivial. Testing whether providing HLA-only MSAs sharpens groove backbone stability and side-chain rotamer placement is a valuable next ablation.
 
 ---
 
