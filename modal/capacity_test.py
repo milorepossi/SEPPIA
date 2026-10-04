@@ -23,8 +23,7 @@ image = modal.Image.debian_slim(python_version="3.12").pip_install("torch")
 app = modal.App("boltz-pmhc-capacity", image=image)
 
 
-@app.function(gpu="L4", cpu=10.0, timeout=600, max_containers=64)
-def hold(shard: int, seconds: float) -> str:
+def _hold_body(shard: int, seconds: float) -> str:
     """Occupy one L4 for `seconds`, confirming the GPU is real and usable."""
     import torch
 
@@ -44,10 +43,29 @@ def hold(shard: int, seconds: float) -> str:
     })
 
 
+@app.function(gpu="L4", cpu=10.0, timeout=600, max_containers=64)
+def hold_l4(shard: int, seconds: float) -> str:
+    return _hold_body(shard, seconds)
+
+
+@app.function(gpu="L40S", cpu=10.0, timeout=600, max_containers=64)
+def hold_l40s(shard: int, seconds: float) -> str:
+    return _hold_body(shard, seconds)
+
+
+@app.function(gpu="H100", cpu=10.0, timeout=600, max_containers=64)
+def hold_h100(shard: int, seconds: float) -> str:
+    return _hold_body(shard, seconds)
+
+
+HOLDS = {"L4": hold_l4, "L40S": hold_l40s, "H100": hold_h100}
+
+
 @app.local_entrypoint()
-def check(shards: int = 8, seconds: float = 45.0,
+def check(shards: int = 8, seconds: float = 45.0, gpu: str = "L4",
           out: str = "modal/capacity_results.json"):
     launched = time.time()
+    hold = HOLDS[gpu]
     rows = [json.loads(r) for r in hold.starmap([(s, seconds) for s in range(shards)])]
     rows.sort(key=lambda r: r["start"])
 
@@ -60,6 +78,7 @@ def check(shards: int = 8, seconds: float = 45.0,
         peak = max(peak, live)
 
     report = {
+        "gpu": gpu,
         "requested_shards": shards,
         "containers_returned": len(rows),
         "peak_concurrent": peak,
